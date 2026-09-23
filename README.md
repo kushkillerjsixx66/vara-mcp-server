@@ -23,7 +23,7 @@ vara-mcp-server/
 │   └── index.py            # Vercel Python entry (exposes FastAPI app)
 ├── src/
 │   ├── __init__.py
-│   ├── server.py           # FastAPI / MCP surface
+│   ├── server.py           # FastAPI / MCP surface (/api/mcp)
 │   ├── tools.py            # Tool implementations
 │   ├── schemas.py          # JSON Schema definitions
 │   └── config.py           # Paths & defaults
@@ -44,7 +44,13 @@ vara-mcp-server/
    - `VARA_PACKAGE_PATH` = `/var/task/vendor/vara`
    - `VARA_DATA_ROOT`   = `/var/task/vendor/vara`
 3. Deploy. Copy the production HTTPS URL.
-4. In **Grok → Connectors → New → Custom** paste that URL.
+4. In **Grok → Connectors → New → Custom** paste:
+
+   ```
+   https://<your-vercel-domain>/api/mcp
+   ```
+
+   (canonical-vault style path)
 
 ### Vercel realities
 
