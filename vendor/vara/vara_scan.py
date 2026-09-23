@@ -45,6 +45,13 @@ class VaraConfig:
     enable_multi_timescale: bool = True
     timescale_windows: list = field(default_factory=lambda: [6, 24, 72, 168])
     config_hash: str = ""
+    # Semantic clustering contract
+    clustering_min_cluster_size: int = 2
+    clustering_min_samples: int = 1
+    clustering_metric: str = "cosine"
+    cluster_selection_epsilon: float = 0.0
+    embedding_model: str = "all-MiniLM-L6-v2"
+    enable_incremental_lineage: bool = True
 
     def compute_hash(self) -> str:
         payload = json.dumps(
@@ -56,6 +63,12 @@ class VaraConfig:
                 "enable_dual_track": self.enable_dual_track,
                 "high_novelty_floor": self.high_novelty_floor,
                 "weak_novelty_floor": self.weak_novelty_floor,
+                "clustering_min_cluster_size": self.clustering_min_cluster_size,
+                "clustering_min_samples": self.clustering_min_samples,
+                "clustering_metric": self.clustering_metric,
+                "cluster_selection_epsilon": self.cluster_selection_epsilon,
+                "embedding_model": self.embedding_model,
+                "enable_incremental_lineage": self.enable_incremental_lineage,
             },
             sort_keys=True,
         )
@@ -142,30 +155,55 @@ def stage_dual_track(signals: list, config: VaraConfig) -> tuple:
     return high, weak
 
 
-def stage_cluster(signals: list) -> tuple:
-    from collections import defaultdict
-    buckets = defaultdict(list)
-    for sig in signals:
-        if not isinstance(sig, dict):
-            continue
-        plane = sig.get("plane", "unknown")
-        novelty = float(sig.get("novelty_score", 0.0))
-        band = round(novelty * 4) / 4
-        key = f"{plane}:{band:.2f}"
-        cid = "c:" + hashlib.sha256(key.encode()).hexdigest()[:8]
-        sig["cluster_id"] = cid
-        buckets[cid].append(sig)
-    enriched = [s for bucket in buckets.values() for s in bucket]
-    clusters = [
-        {
-            "cluster_id": cid,
-            "plane": members[0].get("plane", ""),
-            "member_count": len(members),
-            "avg_novelty": round(sum(float(m.get("novelty_score", 0)) for m in members) / len(members), 4),
-        }
-        for cid, members in buckets.items()
-    ]
-    return enriched, clusters
+def stage_cluster(signals: list, config: VaraConfig) -> tuple:
+    """Semantic HDBSCAN clustering. Noise is preserved, never silently discarded."""
+    if not signals:
+        return [], []
+
+    try:
+        from clustering import ClusteringEngine
+
+        class ClusterConfig:
+            min_cluster_size = max(2, int(config.clustering_min_cluster_size))
+            min_samples = max(1, int(config.clustering_min_samples))
+            metric = config.clustering_metric
+            cluster_selection_epsilon = float(config.cluster_selection_epsilon)
+            embedding_model = config.embedding_model
+            enable_incremental_lineage = bool(config.enable_incremental_lineage)
+
+        engine = ClusteringEngine(config=ClusterConfig(), logger=logger)
+        result = engine.cluster(signals)
+
+        by_id = {s.get("signal_id"): s for s in signals}
+        for index, signal in enumerate(signals):
+            sid = signal.get("signal_id")
+            if not sid:
+                sid = engine._signal_id(signal, index)
+                signal["signal_id"] = sid
+            membership = result.soft_membership.get(sid, {})
+            if membership:
+                cid, probability = next(iter(membership.items()))
+                signal["cluster_id"] = cid
+                signal["cluster_probability"] = probability
+                signal["cluster_state"] = "clustered"
+            else:
+                signal["cluster_id"] = None
+                signal["cluster_probability"] = 0.0
+                signal["cluster_state"] = "noise"
+
+        clusters = [c.model_dump() for c in result.clusters]
+        for noise_id in result.noise_signals:
+            if noise_id in by_id:
+                by_id[noise_id]["cluster_state"] = "noise"
+        return signals, clusters
+    except Exception as exc:
+        logger.error("Semantic clustering unavailable: %s", exc)
+        # Preserve observations as explicit noise rather than reverting to fake clusters.
+        for signal in signals:
+            signal["cluster_id"] = None
+            signal["cluster_probability"] = 0.0
+            signal["cluster_state"] = "noise"
+        return signals, []
 
 
 def run_vara_scan(config: VaraConfig) -> VaraScanReport:
@@ -204,8 +242,9 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
 
     if config.enable_dual_track:
         high, weak = stage_dual_track(normalized, config)
-        clustered_high, clusters = stage_cluster(high)
-        clustered_weak, _ = stage_cluster(weak)
+        clustered_high, clusters_high = stage_cluster(high, config)
+        clustered_weak, clusters_weak = stage_cluster(weak, config)
+        clusters = clusters_high + clusters_weak
         sentinel_high = run_sentinel(clustered_high, scan_id, weak_track=False)
         sentinel_weak = run_sentinel(clustered_weak, scan_id, weak_track=True)
         handoff_high = sentinel_to_vault_handoff(sentinel_high)
@@ -223,7 +262,7 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         weak_out = clustered_weak
         clustered = clustered_high + clustered_weak
     else:
-        clustered, clusters = stage_cluster(normalized)
+        clustered, clusters = stage_cluster(normalized, config)
         sentinel_report = run_sentinel(clustered, scan_id)
         handoff = sentinel_to_vault_handoff(sentinel_report)
         vault_report, veil_report = route_signals(
