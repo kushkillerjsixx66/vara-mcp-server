@@ -1,0 +1,33 @@
+{
+  "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+  "scan_label": "seed_historical",
+  "timestamp": "2026-09-02T01:31:13.600048",
+  "config_hash": "seed0001",
+  "keywords": ["AI", "agentic", "compute", "MCP"],
+  "active_planes": ["tech", "scientific"],
+  "signals": [
+    {
+      "plane": "tech",
+      "title": "Enterprise AI real risk is the complexity between agents",
+      "novelty_score": 0.1559,
+      "url": "https://venturebeat.com/ai/enterprise-ais-real-risk-isnt-autonomous-agents-its-the-complexity-between-them"
+    },
+    {
+      "plane": "tech",
+      "title": "Google redesigned the search box for the first time in 25 years",
+      "novelty_score": 0.3119,
+      "url": "https://venturebeat.com/technology/google-just-redesigned-the-search-box-for-the-first-time-in-25-years-heres-why-it-matters-more-than-you-think"
+    },
+    {
+      "plane": "tech",
+      "title": "The E.U. AI Drive Undermines Its Own Chip Strategy",
+      "novelty_score": 0.2729,
+      "url": "https://spectrum.ieee.org/europes-ai-drive"
+    }
+  ],
+  "clusters": [],
+  "drift_log": [],
+  "null_result": false,
+  "sentinel": {"passed": 3, "blocked": 0, "deferred": 0, "pruned": 0},
+  "routing": {"harvested": 3, "vault_bound": 3, "veil_held": 0, "veil_promoted": 0}
+}
