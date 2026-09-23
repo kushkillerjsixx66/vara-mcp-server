@@ -1,0 +1,45 @@
+{
+  "tools": [
+    {
+      "name": "vara_run_scan",
+      "description": "Execute a full Real Vara scan using the operational dual-track, multi-timescale pipeline.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keywords": { "type": "array", "items": { "type": "string" } },
+          "active_planes": { "type": "array", "items": { "type": "string" } },
+          "sweep_depth_hours": { "type": "integer", "default": 24 },
+          "scan_label": { "type": "string" },
+          "enable_dual_track": { "type": "boolean", "default": true },
+          "generate_fir": { "type": "boolean", "default": false }
+        },
+        "required": ["keywords"]
+      }
+    },
+    {
+      "name": "vara_list_scans",
+      "description": "List historical Vara scan metadata.",
+      "inputSchema": { "type": "object", "properties": { "limit": { "type": "integer", "default": 20 } } }
+    },
+    {
+      "name": "vara_get_scan",
+      "description": "Retrieve a complete historical VaraScanReport by scan_id.",
+      "inputSchema": { "type": "object", "properties": { "scan_id": { "type": "string" } }, "required": ["scan_id"] }
+    },
+    {
+      "name": "vara_query_signals",
+      "description": "Query the committed Vault corpus.",
+      "inputSchema": { "type": "object", "properties": { "plane": { "type": "string" }, "limit": { "type": "integer", "default": 50 } } }
+    },
+    {
+      "name": "vara_get_veil_state",
+      "description": "Inspect current Veil hold entries and trajectories.",
+      "inputSchema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "vara_generate_fir",
+      "description": "Generate an Operator-Tier Field Intel Report from a scan_id.",
+      "inputSchema": { "type": "object", "properties": { "scan_id": { "type": "string" } } }
+    }
+  ]
+}
