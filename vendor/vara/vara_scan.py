@@ -1,6 +1,6 @@
 """
-vara_scan.py — Vara Scan Pipeline Orchestrator (MCP vendor copy)
-Dual-track aware; imports sentinel + veil/vault.
+vara_scan.py — Vara Scan Pipeline Orchestrator (MCP vendor)
+Dual-track (high + weak), entity first-seen enrichment, Sentinel + Veil/Vault.
 """
 from __future__ import annotations
 
@@ -53,6 +53,9 @@ class VaraConfig:
                 "sweep_depth_hours": self.sweep_depth_hours,
                 "active_planes": sorted(self.active_planes),
                 "scan_label": self.scan_label,
+                "enable_dual_track": self.enable_dual_track,
+                "high_novelty_floor": self.high_novelty_floor,
+                "weak_novelty_floor": self.weak_novelty_floor,
             },
             sort_keys=True,
         )
@@ -74,15 +77,15 @@ class VaraScanReport:
     error: Optional[str] = None
     sentinel: Optional[dict] = None
     routing: Optional[dict] = None
+    weak_signals: Optional[list] = None
 
 
 def harvest_plane(plane: str, keywords: list, sweep_hours: int, **kwargs) -> list:
-    """Minimal harvester — tries real module, else returns empty (safe)."""
     try:
         from vara_harvesters import harvest_plane as _hp
         return _hp(plane=plane, keywords=keywords, sweep_hours=sweep_hours, **kwargs)
     except Exception as e:
-        logger.warning("harvest_plane %s failed or unavailable: %s", plane, e)
+        logger.warning("harvest_plane %s failed: %s", plane, e)
         return []
 
 
@@ -107,9 +110,36 @@ def stage_intake(config: VaraConfig) -> tuple:
                 extra_substacks=config.extra_substacks,
             )
             all_signals.extend(plane_sigs)
+            logger.info("Intake plane=%s signals=%d", plane, len(plane_sigs))
         except Exception as e:
             logger.error("Intake plane=%s failed: %s", plane, e)
     return all_signals, errors
+
+
+def stage_enrich_entities(signals: list) -> list:
+    try:
+        from entity_watchlist import enrich_signal_with_entities
+        return [enrich_signal_with_entities(s) if isinstance(s, dict) else s for s in signals]
+    except Exception:
+        return signals
+
+
+def stage_dual_track(signals: list, config: VaraConfig) -> tuple:
+    """Split into high-novelty and weak-signal tracks."""
+    high, weak = [], []
+    for sig in signals:
+        if not isinstance(sig, dict):
+            continue
+        nov = float(sig.get("novelty_score", 0))
+        if nov >= config.high_novelty_floor:
+            sig["track"] = "high"
+            high.append(sig)
+        elif nov >= config.weak_novelty_floor:
+            sig["track"] = "weak"
+            weak.append(sig)
+        else:
+            sig["track"] = "below_floor"
+    return high, weak
 
 
 def stage_cluster(signals: list) -> tuple:
@@ -131,7 +161,7 @@ def stage_cluster(signals: list) -> tuple:
             "cluster_id": cid,
             "plane": members[0].get("plane", ""),
             "member_count": len(members),
-            "avg_novelty": round(sum(m.get("novelty_score", 0) for m in members) / len(members), 4),
+            "avg_novelty": round(sum(float(m.get("novelty_score", 0)) for m in members) / len(members), 4),
         }
         for cid, members in buckets.items()
     ]
@@ -154,7 +184,6 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         )
 
     if not raw_signals:
-        # Normalize to dicts if HarvestedSignal objects
         return VaraScanReport(
             scan_id=scan_id, scan_label=config.scan_label, timestamp=timestamp,
             config_hash=config.config_hash, keywords=config.keywords,
@@ -162,7 +191,6 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
             drift_log=[], null_result=True,
         )
 
-    # Normalize signals to dicts
     normalized = []
     for s in raw_signals:
         if hasattr(s, "__dataclass_fields__"):
@@ -172,15 +200,41 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         else:
             normalized.append({"content": str(s), "novelty_score": 0.1, "plane": "tech"})
 
-    clustered, clusters = stage_cluster(normalized)
-    sentinel_report = run_sentinel(clustered, scan_id)
-    handoff = sentinel_to_vault_handoff(sentinel_report)
-    vault_report, veil_report = route_signals(
-        passed_signals=handoff["passed_signals"],
-        deferred_signals=handoff["deferred_signals"],
-        scan_id=scan_id,
-    )
-    output_signals = handoff["passed_signals"] + list(getattr(veil_report, "promoted_signals", []) or [])
+    normalized = stage_enrich_entities(normalized)
+
+    if config.enable_dual_track:
+        high, weak = stage_dual_track(normalized, config)
+        clustered_high, clusters = stage_cluster(high)
+        clustered_weak, _ = stage_cluster(weak)
+        sentinel_high = run_sentinel(clustered_high, scan_id, weak_track=False)
+        sentinel_weak = run_sentinel(clustered_weak, scan_id, weak_track=True)
+        handoff_high = sentinel_to_vault_handoff(sentinel_high)
+        handoff_weak = sentinel_to_vault_handoff(sentinel_weak)
+        passed = handoff_high["passed_signals"] + handoff_weak["passed_signals"]
+        deferred = handoff_high["deferred_signals"] + handoff_weak["deferred_signals"]
+        vault_report, veil_report = route_signals(passed, deferred, scan_id)
+        output_signals = passed + list(getattr(veil_report, "promoted_signals", []) or [])
+        sentinel_summary = {
+            "high": {"passed": sentinel_high.passed, "blocked": sentinel_high.blocked,
+                      "deferred": sentinel_high.deferred, "pruned": sentinel_high.pruned},
+            "weak": {"passed": sentinel_weak.passed, "blocked": sentinel_weak.blocked,
+                      "deferred": sentinel_weak.deferred, "pruned": sentinel_weak.pruned},
+        }
+        weak_out = clustered_weak
+        clustered = clustered_high + clustered_weak
+    else:
+        clustered, clusters = stage_cluster(normalized)
+        sentinel_report = run_sentinel(clustered, scan_id)
+        handoff = sentinel_to_vault_handoff(sentinel_report)
+        vault_report, veil_report = route_signals(
+            handoff["passed_signals"], handoff["deferred_signals"], scan_id)
+        output_signals = handoff["passed_signals"] + list(getattr(veil_report, "promoted_signals", []) or [])
+        sentinel_summary = {
+            "sentinel_id": sentinel_report.sentinel_id,
+            "passed": sentinel_report.passed, "blocked": sentinel_report.blocked,
+            "deferred": sentinel_report.deferred, "pruned": sentinel_report.pruned,
+        }
+        weak_out = []
 
     report = VaraScanReport(
         scan_id=scan_id,
@@ -193,24 +247,22 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         clusters=clusters,
         drift_log=[],
         null_result=len(clustered) == 0,
-        sentinel={
-            "sentinel_id": sentinel_report.sentinel_id,
-            "total_input": sentinel_report.total_input,
-            "passed": sentinel_report.passed,
-            "blocked": sentinel_report.blocked,
-            "deferred": sentinel_report.deferred,
-            "pruned": sentinel_report.pruned,
-        },
+        sentinel=sentinel_summary,
         routing={
             "harvested": len(clustered),
             "vault_bound": len(output_signals),
             "veil_held": len(getattr(veil_report, "held_entries", []) or []),
             "veil_promoted": getattr(veil_report, "promoted", 0),
         },
+        weak_signals=weak_out if config.enable_dual_track else None,
     )
 
     out_path = os.path.join(OUTPUT_DIR, f"scan_{scan_id[:8]}.json")
     with open(out_path, "w") as f:
         json.dump(asdict(report), f, indent=2, default=str)
 
+    logger.info(
+        "Scan complete: id=%s harvested=%d output=%d",
+        scan_id[:8], len(normalized), len(output_signals),
+    )
     return report
