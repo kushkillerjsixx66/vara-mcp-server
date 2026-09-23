@@ -1,1 +1,6 @@
-[]
+[
+  {"scan_id": "init", "plane": "tech", "raw_velocity": 0.72, "z_score": 0.1, "spike": false, "timestamp": "2026-09-01T00:00:00"},
+  {"scan_id": "init", "plane": "scientific", "raw_velocity": 0.55, "z_score": -0.2, "spike": false, "timestamp": "2026-09-01T00:00:00"},
+  {"scan_id": "init", "plane": "economic", "raw_velocity": 0.48, "z_score": 0.0, "spike": false, "timestamp": "2026-09-01T00:00:00"},
+  {"scan_id": "init", "plane": "geopolitical", "raw_velocity": 0.61, "z_score": 0.3, "spike": false, "timestamp": "2026-09-01T00:00:00"}
+]
