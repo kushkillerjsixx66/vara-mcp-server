@@ -13,15 +13,18 @@ from .embeddings import EmbeddingBackend, SentenceTransformerBackend
 class ClusteringEngine:
     """Semantic HDBSCAN engine with explicit noise and lineage preservation."""
 
-    def __init__(self, backend=None, logger=None, config=None, vault_client=None):
+    def __init__(self, backend=None, logger=None, config=None, vault_client=None, cluster_backend=None):
         self.logger = logger or logging.getLogger("vara.clustering")
         self.config = config
         self.vault_client = vault_client
         self.backend = backend or SentenceTransformerBackend(
             getattr(config, "embedding_model", "all-MiniLM-L6-v2")
         )
-        from .backend_hdbscan import HDBSCANBackend
-        self.hdbscan = HDBSCANBackend(config, self.logger)
+        if cluster_backend is not None:
+            self.hdbscan = cluster_backend
+        else:
+            from .backend_hdbscan import HDBSCANBackend
+            self.hdbscan = HDBSCANBackend(config, self.logger)
 
     @staticmethod
     def _signal_id(signal, index):
