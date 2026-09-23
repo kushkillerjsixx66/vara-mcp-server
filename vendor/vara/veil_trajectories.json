@@ -1,1 +1,18 @@
-{}
+{
+  "adjacent_possible:W1": {
+    "trajectory_id": "adjacent_possible:W1",
+    "plane": "adjacent_possible",
+    "first_seen_scan": "harness-scan-1",
+    "observation_count": 3,
+    "status": "RISING",
+    "notes": "Weak-signal trajectory placeholder from local corpus"
+  },
+  "tech:W2": {
+    "trajectory_id": "tech:W2",
+    "plane": "tech",
+    "first_seen_scan": "harness-scan-2",
+    "observation_count": 2,
+    "status": "HELD",
+    "notes": "MCP/agent protocol weak signals"
+  }
+}
