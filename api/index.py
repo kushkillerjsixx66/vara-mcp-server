@@ -1,6 +1,9 @@
 """
 Vercel serverless entry for Vara MCP Server.
 
+Primary MCP surface: /api/mcp  (canonical-vault style)
+Health probe:        /health
+
 All routes are handled by the FastAPI app defined in src/server.py.
 Live scans (vara_run_scan) may hit platform timeouts on free/hobby plans
 because they perform network I/O across multiple feeds. Query tools are safe.
