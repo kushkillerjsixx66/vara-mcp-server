@@ -1,1 +1,138 @@
-[]
+[
+  {
+    "vault_id": "4098820bdd7681d84b21bb17",
+    "source_id": "src:e2d9855d0cdd6070",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "This Teen Helped Native American Students Earn Ham Radio Licenses",
+      "content": "IEEE Spectrum feature on ham radio education project",
+      "url": "https://spectrum.ieee.org/ruchira-shree-ham-radio",
+      "novelty_score": 0.1559,
+      "feed_tier": "main"
+    }
+  },
+  {
+    "vault_id": "94d0b4d09d54a8d0a562aa7c",
+    "source_id": "src:4d279521e8464010",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "The E.U.s AI Drive Undermines Its Own Chip Strategy",
+      "content": "IEEE Spectrum analysis of EU AI and semiconductor policy tension",
+      "url": "https://spectrum.ieee.org/europes-ai-drive",
+      "novelty_score": 0.2729,
+      "feed_tier": "main"
+    }
+  },
+  {
+    "vault_id": "cd05d0b6a666e5abb54ae3fa",
+    "source_id": "src:e962cc8197319f92",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "Enterprise AI real risk is not autonomous agents. It is the complexity between them.",
+      "content": "VentureBeat on agent orchestration complexity in enterprises",
+      "url": "https://venturebeat.com/ai/enterprise-ais-real-risk-isnt-autonomous-agents-its-the-complexity-between-them",
+      "novelty_score": 0.1559,
+      "feed_tier": "main"
+    }
+  },
+  {
+    "vault_id": "ca38642a8b2d45738cd55116",
+    "source_id": "src:0faf81bf885ef796",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "Orchestration is the new challenge for CX in the age of AI agents",
+      "content": "VentureBeat on CX architecture under agentic load",
+      "url": "https://venturebeat.com/orchestration/orchestration-is-the-new-challenge-for-cx-in-the-age-of-ai-agents",
+      "novelty_score": 0.1949,
+      "feed_tier": "main"
+    }
+  },
+  {
+    "vault_id": "d69f84e3c30d77a79e44fa4f",
+    "source_id": "src:64e893ac93f36446",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "Google redesigned the search box for the first time in 25 years",
+      "content": "VentureBeat on Google search UI shift and agent implications",
+      "url": "https://venturebeat.com/technology/google-just-redesigned-the-search-box-for-the-first-time-in-25-years-heres-why-it-matters-more-than-you-think",
+      "novelty_score": 0.3119,
+      "feed_tier": "main"
+    }
+  },
+  {
+    "vault_id": "2bc57a478662ad3d78cb93be",
+    "source_id": "src:dbc9a46701955c3d",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "Railway secures $100 million to challenge AWS with AI-native cloud infrastructure",
+      "content": "VentureBeat funding signal on AI-native cloud",
+      "url": "https://venturebeat.com/ai/railway-secures-100-million",
+      "novelty_score": 0.22,
+      "feed_tier": "main"
+    }
+  },
+  {
+    "vault_id": "7810e30b82bbcec72ec69ca5",
+    "source_id": "src:4545bb132b89bf2f",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "A New NASA Design Turbocharges Nuclear Spacecraft",
+      "content": "IEEE Spectrum on bimodal nuclear propulsion",
+      "url": "https://spectrum.ieee.org/bimodal-nuclear-spacecraft",
+      "novelty_score": 0.1949,
+      "feed_tier": "main"
+    }
+  },
+  {
+    "vault_id": "ccad0e7c060609e261eb03ee",
+    "source_id": "src:8dc264cbe4cd333b",
+    "signal_id": null,
+    "scan_id": "7f061fcc-7a1b-410a-a4cb-152fd25ebfd6",
+    "committed_at": "2026-09-02T01:31:13.600048",
+    "origin": "passed",
+    "canonized": false,
+    "signal": {
+      "plane": "tech",
+      "title": "IBM Built the Cold War Most Powerful Code Breaker for the NSA",
+      "content": "IEEE Spectrum historical compute signal",
+      "url": "https://spectrum.ieee.org/cold-war-codebreaker-nsa-ibm",
+      "novelty_score": 0.3509,
+      "feed_tier": "main"
+    }
+  }
+]
