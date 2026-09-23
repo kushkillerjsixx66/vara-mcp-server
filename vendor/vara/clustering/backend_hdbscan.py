@@ -23,7 +23,7 @@ class HDBSCANBackend:
         )
 
     def run(self, vectors):
-        if not vectors:
+        if vectors is None or len(vectors) == 0:
             return [], [], []
         try:
             vectors = np.asarray(vectors, dtype=np.float32)
