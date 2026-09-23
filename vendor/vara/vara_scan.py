@@ -63,6 +63,12 @@ class VaraConfig:
                 "enable_dual_track": self.enable_dual_track,
                 "high_novelty_floor": self.high_novelty_floor,
                 "weak_novelty_floor": self.weak_novelty_floor,
+                "clustering_min_cluster_size": self.clustering_min_cluster_size,
+                "clustering_min_samples": self.clustering_min_samples,
+                "clustering_metric": self.clustering_metric,
+                "cluster_selection_epsilon": self.cluster_selection_epsilon,
+                "embedding_model": self.embedding_model,
+                "enable_incremental_lineage": self.enable_incremental_lineage,
             },
             sort_keys=True,
         )
@@ -169,10 +175,10 @@ def stage_cluster(signals: list, config: VaraConfig) -> tuple:
         result = engine.cluster(signals)
 
         by_id = {s.get("signal_id"): s for s in signals}
-        for signal in signals:
+        for index, signal in enumerate(signals):
             sid = signal.get("signal_id")
             if not sid:
-                sid = engine._signal_id(signal, signals.index(signal))
+                sid = engine._signal_id(signal, index)
                 signal["signal_id"] = sid
             membership = result.soft_membership.get(sid, {})
             if membership:
