@@ -75,3 +75,5 @@ vara-mcp-server/
 | `vara_generate_fir` | Operator-Tier Field Intel Report markdown |
 
 See `docs/ARCHITECTURE.md` and `docs/DEPLOY.md` for full detail.
+
+[![M8ven Score](https://m8ven.ai/badge/mcp/kushkillerjsixx66/vara-mcp-server)](https://m8ven.ai/mcp/kushkillerjsixx66/vara-mcp-server)
