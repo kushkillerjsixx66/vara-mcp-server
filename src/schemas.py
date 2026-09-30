@@ -5,11 +5,17 @@ TOOLS = [
     {
         "name": "vara_run_scan",
         "description": "Execute a full Real Vara scan using the operational dual-track, multi-timescale pipeline. Returns a VaraScanReport.",
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
                 "keywords": {"type": "array", "items": {"type": "string"}},
-                "active_planes": {"type": "array", "items": {"type": "string"}},
+                "active_planes": {"type": "array", "items": {"type": "string", "enum": ["social", "scientific", "tech", "adjacent_possible", "economic", "dark", "geopolitical", "persons", "firecrawl"]}},
                 "sweep_depth_hours": {"type": "integer", "minimum": 1, "maximum": 720, "default": 24},
                 "scan_label": {"type": "string"},
                 "enable_dual_track": {"type": "boolean", "default": True},
@@ -19,12 +25,13 @@ TOOLS = [
                 "use_firecrawl": {"type": "boolean", "default": False},
                 "generate_fir": {"type": "boolean", "default": False},
             },
-            "required": ["keywords"],
+            "required": [],
         },
     },
     {
         "name": "vara_list_scans",
         "description": "List historical Vara scan metadata from the local archive.",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -37,6 +44,7 @@ TOOLS = [
     {
         "name": "vara_get_scan",
         "description": "Retrieve a complete historical VaraScanReport by scan_id (or short prefix).",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -49,6 +57,7 @@ TOOLS = [
     {
         "name": "vara_query_signals",
         "description": "Query the committed Vault corpus (and optionally current Veil hold).",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -67,6 +76,7 @@ TOOLS = [
     {
         "name": "vara_get_veil_state",
         "description": "Inspect current Veil hold entries and trajectories.",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -79,6 +89,7 @@ TOOLS = [
     {
         "name": "vara_generate_fir",
         "description": "Generate an Operator-Tier or lightweight Field Intel Report from a scan_id.",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -88,6 +99,7 @@ TOOLS = [
                 "format": {"type": "string", "enum": ["operator_tier", "lightweight"], "default": "operator_tier"},
                 "next_cycle_hint": {"type": "string"},
             },
+            "required": ["scan_id"],
         },
     },
 ]
