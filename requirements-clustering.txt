@@ -1,0 +1,2 @@
+# Optional high-quality local embedding backend for full-fidelity/off-platform Vara clustering.
+sentence-transformers>=3.0.0
