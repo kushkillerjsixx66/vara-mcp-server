@@ -51,3 +51,21 @@ def test_lineage_represents_split():
     lineage = derive_lineage(previous, current)
     assert lineage["clusters"]["left"]["status"] == "split"
     assert lineage["clusters"]["right"]["status"] == "split"
+
+
+def test_lightweight_embedding_backend_is_deterministic():
+    from vendor.vara.clustering.embeddings import LightweightEmbeddingBackend
+    backend = LightweightEmbeddingBackend(dimensions=64)
+    first = backend.embed_texts(["AI agents change systems", "AI agents change systems"])
+    second = backend.embed_texts(["AI agents change systems"])
+    import numpy as np
+    assert first.shape == (2, 64)
+    assert np.allclose(first[0], first[1])
+    assert np.allclose(first[0], second[0])
+    assert np.isclose(np.linalg.norm(first[0]), 1.0)
+
+
+def test_engine_uses_lightweight_backend_by_default():
+    from vendor.vara.clustering.embeddings import LightweightEmbeddingBackend
+    engine = ClusteringEngine(config=config(), cluster_backend=FakeClusterBackend())
+    assert isinstance(engine.backend, LightweightEmbeddingBackend)

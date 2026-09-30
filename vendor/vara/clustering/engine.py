@@ -7,7 +7,7 @@ import numpy as np
 
 from .models import Cluster, ClusterResult
 from .lineage import compute_centroid, derive_lineage
-from .embeddings import EmbeddingBackend, SentenceTransformerBackend
+from .embeddings import EmbeddingBackend, build_embedding_backend
 
 
 class ClusteringEngine:
@@ -17,9 +17,7 @@ class ClusteringEngine:
         self.logger = logger or logging.getLogger("vara.clustering")
         self.config = config
         self.vault_client = vault_client
-        self.backend = backend or SentenceTransformerBackend(
-            getattr(config, "embedding_model", "all-MiniLM-L6-v2")
-        )
+        self.backend = backend or build_embedding_backend(config)
         if cluster_backend is not None:
             self.hdbscan = cluster_backend
         else:

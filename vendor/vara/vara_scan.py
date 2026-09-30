@@ -51,6 +51,8 @@ class VaraConfig:
     clustering_metric: str = "cosine"
     cluster_selection_epsilon: float = 0.0
     embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_backend: str = "lightweight"
+    embedding_dimensions: int = 256
     enable_incremental_lineage: bool = True
 
     def compute_hash(self) -> str:
@@ -68,6 +70,8 @@ class VaraConfig:
                 "clustering_metric": self.clustering_metric,
                 "cluster_selection_epsilon": self.cluster_selection_epsilon,
                 "embedding_model": self.embedding_model,
+                "embedding_backend": self.embedding_backend,
+                "embedding_dimensions": self.embedding_dimensions,
                 "enable_incremental_lineage": self.enable_incremental_lineage,
             },
             sort_keys=True,
@@ -169,6 +173,8 @@ def stage_cluster(signals: list, config: VaraConfig) -> tuple:
             metric = config.clustering_metric
             cluster_selection_epsilon = float(config.cluster_selection_epsilon)
             embedding_model = config.embedding_model
+            embedding_backend = getattr(config, "embedding_backend", "lightweight")
+            embedding_dimensions = getattr(config, "embedding_dimensions", 256)
             enable_incremental_lineage = bool(config.enable_incremental_lineage)
 
         engine = ClusteringEngine(config=ClusterConfig(), logger=logger)
