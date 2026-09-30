@@ -77,3 +77,5 @@ vara-mcp-server/
 See `docs/ARCHITECTURE.md` and `docs/DEPLOY.md` for full detail.
 
 [![M8ven Score](https://m8ven.ai/badge/mcp/kushkillerjsixx66/vara-mcp-server)](https://m8ven.ai/mcp/kushkillerjsixx66/vara-mcp-server)
+
+[![M8ven Score](https://m8ven.ai/badge/mcp/kushkillerjsixx66-vara-mcp-server-18llln?v=3fb7042ea6c08d5fe5705537a872e398)](https://m8ven.ai/mcp/kushkillerjsixx66-vara-mcp-server-18llln)
