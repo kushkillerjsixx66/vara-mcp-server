@@ -4,7 +4,7 @@
       "name": "vara_run_scan",
       "description": "Execute a full Real Vara scan using the operational dual-track, multi-timescale pipeline.",
       "annotations": {"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true},
-      "inputSchema": {"type": "object", "properties": {"keywords": {"type": "array", "items": {"type": "string"}}, "active_planes": {"type": "array", "items": {"type": "string"}}, "sweep_depth_hours": {"type": "integer", "minimum": 1, "maximum": 720, "default": 24}, "scan_label": {"type": "string"}, "enable_dual_track": {"type": "boolean", "default": true}, "high_novelty_floor": {"type": "number", "default": 0.15}, "weak_novelty_floor": {"type": "number", "default": 0.05}, "enable_multi_timescale": {"type": "boolean", "default": true}, "use_firecrawl": {"type": "boolean", "default": false}, "generate_fir": {"type": "boolean", "default": false}}, "required": ["keywords"]}
+      "inputSchema": {"type": "object", "properties": {"keywords": {"type": "array", "items": {"type": "string"}}, "active_planes": {"type": "array", "items": {"type": "string", "enum": ["social", "scientific", "tech", "adjacent_possible", "economic", "dark", "geopolitical", "persons", "firecrawl"]}}, "sweep_depth_hours": {"type": "integer", "minimum": 1, "maximum": 720, "default": 24}, "scan_label": {"type": "string"}, "enable_dual_track": {"type": "boolean", "default": true}, "high_novelty_floor": {"type": "number", "default": 0.15}, "weak_novelty_floor": {"type": "number", "default": 0.05}, "enable_multi_timescale": {"type": "boolean", "default": true}, "use_firecrawl": {"type": "boolean", "default": false}, "generate_fir": {"type": "boolean", "default": false}}, "required": []}
     },
     {
       "name": "vara_list_scans",
@@ -34,7 +34,7 @@
       "name": "vara_generate_fir",
       "description": "Generate an Operator-Tier Field Intel Report from a scan_id.",
       "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
-      "inputSchema": {"type": "object", "properties": {"scan_id": {"type": "string"}, "series": {"type": "string"}, "baseline": {"type": "string"}, "format": {"type": "string", "enum": ["operator_tier", "lightweight"], "default": "operator_tier"}, "next_cycle_hint": {"type": "string"}}}
+      "inputSchema": {"type": "object", "properties": {"scan_id": {"type": "string"}, "series": {"type": "string"}, "baseline": {"type": "string"}, "format": {"type": "string", "enum": ["operator_tier", "lightweight"], "default": "operator_tier"}, "next_cycle_hint": {"type": "string"}}, "required": ["scan_id"]}}
     }
   ]
 }
