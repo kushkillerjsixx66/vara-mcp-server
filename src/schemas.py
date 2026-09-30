@@ -5,6 +5,12 @@ TOOLS = [
     {
         "name": "vara_run_scan",
         "description": "Execute a full Real Vara scan using the operational dual-track, multi-timescale pipeline. Returns a VaraScanReport.",
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -25,6 +31,7 @@ TOOLS = [
     {
         "name": "vara_list_scans",
         "description": "List historical Vara scan metadata from the local archive.",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -37,6 +44,7 @@ TOOLS = [
     {
         "name": "vara_get_scan",
         "description": "Retrieve a complete historical VaraScanReport by scan_id (or short prefix).",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -49,6 +57,7 @@ TOOLS = [
     {
         "name": "vara_query_signals",
         "description": "Query the committed Vault corpus (and optionally current Veil hold).",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -67,6 +76,7 @@ TOOLS = [
     {
         "name": "vara_get_veil_state",
         "description": "Inspect current Veil hold entries and trajectories.",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -79,6 +89,7 @@ TOOLS = [
     {
         "name": "vara_generate_fir",
         "description": "Generate an Operator-Tier or lightweight Field Intel Report from a scan_id.",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         "inputSchema": {
             "type": "object",
             "properties": {
