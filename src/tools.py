@@ -75,14 +75,32 @@ def vara_run_scan(arguments: dict) -> dict:
         )
 
     import vara_scan as vs
-    original_output = getattr(vs, "OUTPUT_DIR", "vara_output")
+    import vara_veil_vault as vvv
+    import entity_watchlist as ew
+
+    # Keep every stateful Vara component on the MCP-configured data root.
+    # Without this, relative paths in the vendored modules can diverge from
+    # the paths used by the MCP query tools in Vercel/serverless deployments.
+    original_paths = {
+        "output": getattr(vs, "OUTPUT_DIR", "vara_output"),
+        "vault": getattr(vvv, "VAULT_PATH", "vault_signals.json"),
+        "veil": getattr(vvv, "VEIL_HOLD_PATH", "veil_hold.json"),
+        "watchlist": getattr(ew, "WATCHLIST_PATH", "entity_watchlist_state.json"),
+    }
     vs.OUTPUT_DIR = str(config.OUTPUT_DIR)
+    vvv.VAULT_PATH = str(config.VAULT_SIGNALS_PATH)
+    vvv.VEIL_HOLD_PATH = str(config.VEIL_HOLD_PATH)
+    ew.WATCHLIST_PATH = str(config.VARA_DATA_ROOT / "entity_watchlist_state.json")
+    config.VARA_DATA_ROOT.mkdir(parents=True, exist_ok=True)
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
         report = run_vara_scan(cfg)
     finally:
-        vs.OUTPUT_DIR = original_output
+        vs.OUTPUT_DIR = original_paths["output"]
+        vvv.VAULT_PATH = original_paths["vault"]
+        vvv.VEIL_HOLD_PATH = original_paths["veil"]
+        ew.WATCHLIST_PATH = original_paths["watchlist"]
 
     if hasattr(report, "__dataclass_fields__"):
         from dataclasses import asdict
