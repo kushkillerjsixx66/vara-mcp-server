@@ -15,7 +15,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "keywords": {"type": "array", "items": {"type": "string"}},
-                "active_planes": {"type": "array", "items": {"type": "string"}},
+                "active_planes": {"type": "array", "items": {"type": "string", "enum": ["social", "scientific", "tech", "adjacent_possible", "economic", "dark", "geopolitical", "persons", "firecrawl"]}},
                 "sweep_depth_hours": {"type": "integer", "minimum": 1, "maximum": 720, "default": 24},
                 "scan_label": {"type": "string"},
                 "enable_dual_track": {"type": "boolean", "default": True},
@@ -25,7 +25,7 @@ TOOLS = [
                 "use_firecrawl": {"type": "boolean", "default": False},
                 "generate_fir": {"type": "boolean", "default": False},
             },
-            "required": ["keywords"],
+            "required": [],
         },
     },
     {
@@ -99,6 +99,7 @@ TOOLS = [
                 "format": {"type": "string", "enum": ["operator_tier", "lightweight"], "default": "operator_tier"},
                 "next_cycle_hint": {"type": "string"},
             },
+            "required": ["scan_id"],
         },
     },
 ]
