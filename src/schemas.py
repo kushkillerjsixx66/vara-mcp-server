@@ -23,7 +23,7 @@ TOOLS = [
                 "weak_novelty_floor": {"type": "number", "default": 0.05},
                 "enable_multi_timescale": {"type": "boolean", "default": True},
                 "use_firecrawl": {"type": "boolean", "default": False},
-                "generate_fir": {"type": "boolean", "default": False},
+                "generate_fir": {"type": "boolean", "default": False},\n                "lineage": {\n                    "type": "array",\n                    "description": "Canonical Vara lineage entries. Required for canonical promotion; omitted lineage produces a non-canonical scan.",\n                    "items": {\n                        "type": "object",\n                        "required": ["seq", "operator_id", "role", "altitude"],\n                        "properties": {\n                            "seq": {},\n                            "operator_id": {"type": "string"},\n                            "role": {"type": "string"},\n                            "altitude": {"type": "string"}\n                        }\n                    }\n                },
             },
             "required": [],
         },
