@@ -294,7 +294,10 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         sentinel=sentinel_summary,
         routing={
             "harvested": len(clustered),
-            "vault_bound": len(output_signals),
+            "vault_bound": 0,
+            "canonical_promotion_candidates": len(output_signals),
+            "promotion_authority": "canonical_vault_pipeline",
+            "veil_authority": "canonical_veil",
             "veil_held": len(getattr(veil_report, "held_entries", []) or []),
             "veil_promoted": getattr(veil_report, "promoted", 0),
         },
