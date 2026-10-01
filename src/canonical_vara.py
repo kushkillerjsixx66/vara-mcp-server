@@ -29,6 +29,50 @@ PLANE_TO_CANONICAL_DOMAINS: dict[str, tuple[str, ...]] = {
 }
 CANONICAL_DOMAIN_FALLBACK = "ECON"
 
+
+class CanonicalVaraSupervisorAdapter:
+    """Contract adapter for the canonical Vara → EpistemicBus boundary.
+
+    This is deliberately not a second Vara supervisor. It mirrors the
+    canonical supervisor's externally visible context contract so the MCP
+    can act as a portal into Vara without inventing an independent runtime.
+    The canonical Vault remains authoritative for supervisor execution.
+    """
+
+    def __init__(self, event_queue: Any | None = None) -> None:
+        self._event_queue = event_queue
+        self._seq = 0
+
+    def build_context(
+        self,
+        identity: dict[str, Any],
+        runtime_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        self._seq += 1
+        lineage = [{
+            "seq": self._seq,
+            "operator_id": identity.get("operator_id"),
+            "role": identity.get("role"),
+            "altitude": runtime_state.get("altitude"),
+        }]
+        return {
+            "identity": identity,
+            "runtime": runtime_state,
+            "lineage": lineage,
+        }
+
+    def emit(self, context: dict[str, Any]) -> dict[str, Any]:
+        event = {
+            "type": "epistemic_state",
+            "source": "vara",
+            "payload": context,
+        }
+        if self._event_queue is not None:
+            self._event_queue.put(event)
+        return event
+
+
+
 def canonical_domains_for_plane(plane: str | None) -> tuple[str, ...]:
     """Map an operational Vara plane to canonical dispatcher domains."""
     return PLANE_TO_CANONICAL_DOMAINS.get(
