@@ -30,6 +30,7 @@ TOOLS = [
                     "properties": {
                         "operator_id": {"type": "string"},
                         "role": {"type": "string"},
+                        "sovereignty": {"type": "string"},
                     },
                 },
                 "runtime_state": {
@@ -37,6 +38,7 @@ TOOLS = [
                     "description": "Optional canonical Vara runtime state used with identity to construct an epistemic supervisor context.",
                     "properties": {
                         "altitude": {"type": "string"},
+                        "state": {"type": "string"},
                     },
                 },
                 "lineage": {
