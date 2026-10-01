@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from . import config
 from .canonical_vara import govern_operational_report
+from .canonical_veil import CanonicalVeilBoundaryAdapter
 
 # Make the operational Vara package importable
 if str(config.VARA_PACKAGE_PATH) not in sys.path:
@@ -50,15 +51,12 @@ def vara_run_scan(arguments: dict) -> dict:
     keywords = arguments.get("keywords") or ["AI", "agentic", "compute"]
     planes = arguments.get("active_planes") or list(config.DEFAULT_PLANES)
     sweep = int(arguments.get("sweep_depth_hours") or config.DEFAULT_SWEEP_HOURS)
+    # Canonical lineage is authority-bearing context and must be supplied by
+    # the caller. MCP may validate/project identity and runtime state, but it
+    # must never manufacture authoritative lineage.
     lineage = arguments.get("lineage")
     supervisor_identity = arguments.get("identity")
     supervisor_runtime = arguments.get("runtime_state")
-    if lineage is None and supervisor_identity and supervisor_runtime:
-        from .canonical_vara import CanonicalVaraSupervisorAdapter
-        context = CanonicalVaraSupervisorAdapter().build_context(
-            supervisor_identity, supervisor_runtime
-        )
-        lineage = context["lineage"]
     label = arguments.get("scan_label") or f"mcp_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M')}"
 
     cfg_kwargs = {
@@ -122,11 +120,33 @@ def vara_run_scan(arguments: dict) -> dict:
 
     result = govern_operational_report(result, lineage)
     if supervisor_identity and supervisor_runtime:
-        from .canonical_vara import CanonicalVaraSupervisorAdapter
-        supervisor = CanonicalVaraSupervisorAdapter()
-        result["canonical_conformance"]["epistemic_state"] = supervisor.emit(
-            supervisor.build_context(supervisor_identity, supervisor_runtime)
-        )
+        veil = CanonicalVeilBoundaryAdapter()
+        valid, errors = veil.validate(supervisor_identity, supervisor_runtime)
+        result["canonical_conformance"]["veil_boundary"] = {
+            "authority": "canonical_veil",
+            "adapter_only": True,
+            "valid": valid,
+            "errors": errors,
+        }
+        if valid and lineage:
+            veil_context = veil.context(
+                supervisor_identity,
+                supervisor_runtime,
+                lineage=lineage,
+            )
+            from .canonical_vara import CanonicalVaraSupervisorAdapter
+            supervisor = CanonicalVaraSupervisorAdapter()
+            result["canonical_conformance"]["epistemic_state"] = supervisor.emit({
+                "identity": veil_context["identity"],
+                "runtime": veil_context["runtime"],
+                "lineage": lineage,
+            })
+        elif valid:
+            result["canonical_conformance"]["epistemic_state"] = {
+                "status": "not_emitted",
+                "reason": "caller-supplied canonical lineage is required",
+                "authority": "canonical_veil",
+            }
 
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)

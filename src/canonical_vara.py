@@ -59,6 +59,8 @@ class CanonicalVaraSupervisorAdapter:
             "identity": identity,
             "runtime": runtime_state,
             "lineage": lineage,
+            "canonical_authority": False,
+            "derived_context": True,
         }
 
     def emit(self, context: dict[str, Any]) -> dict[str, Any]:

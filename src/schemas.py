@@ -26,22 +26,24 @@ TOOLS = [
                 "generate_fir": {"type": "boolean", "default": False},
                 "identity": {
                     "type": "object",
-                    "description": "Optional canonical Vara operator identity used to derive supervisor lineage when lineage is not supplied.",
+                    "description": "Optional caller-supplied operator identity for canonical Veil boundary validation. Identity does not create authority or lineage.",
                     "properties": {
                         "operator_id": {"type": "string"},
                         "role": {"type": "string"},
+                        "sovereignty": {"type": "string"},
                     },
                 },
                 "runtime_state": {
                     "type": "object",
-                    "description": "Optional canonical Vara runtime state used with identity to construct an epistemic supervisor context.",
+                    "description": "Optional caller-supplied runtime state for canonical Veil boundary validation. Runtime state does not create authority or lineage.",
                     "properties": {
                         "altitude": {"type": "string"},
+                        "state": {"type": "string"},
                     },
                 },
                 "lineage": {
                     "type": "array",
-                    "description": "Canonical Vara lineage entries. Required for canonical promotion; omitted lineage produces a non-canonical scan.",
+                    "description": "Caller-supplied canonical Vara lineage entries. Required for canonical status and promotion; MCP never derives authoritative lineage.",
                     "items": {
                         "type": "object",
                         "required": ["seq", "operator_id", "role", "altitude"],

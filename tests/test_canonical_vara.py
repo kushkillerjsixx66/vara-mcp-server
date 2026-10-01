@@ -99,6 +99,8 @@ def test_supervisor_adapter_derives_canonical_lineage_and_event():
     assert context["lineage"] == [
         {"seq": 1, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
     ]
+    assert context["canonical_authority"] is False
+    assert context["derived_context"] is True
 
     event = adapter.emit(context)
     assert event["type"] == "epistemic_state"
@@ -125,3 +127,95 @@ def test_veil_vendor_has_no_vault_commit_function():
     source = Path("vendor/vara/vara_veil_vault.py").read_text(encoding="utf-8")
     assert "def commit_to_vault" not in source
     assert "def route_signals" not in source
+
+
+def test_canonical_veil_requires_sovereignty_and_altitude():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    valid, errors = CanonicalVeilBoundaryAdapter().validate(
+        {"operator_id": "JRM-01", "role": "operator"},
+        {"state": "ACTIVE"},
+    )
+
+    assert valid is False
+    assert "identity missing: sovereignty" in errors
+    assert "runtime_state missing: altitude" in errors
+
+
+# Canonical boundary regression: Veil validates context but does not emit events.
+def test_canonical_veil_preserves_supplied_boundary_context():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    context = CanonicalVeilBoundaryAdapter().context(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+        lineage=[{"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
+    )
+
+    assert context["authority"] == "canonical_veil"
+    assert context["adapter_only"] is True
+    assert context["identity"]["operator_id"] == "JRM-01"
+    assert context["runtime"]["altitude"] == "A2"
+    assert context["lineage"] == [
+        {"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
+    ]
+
+
+def test_canonical_veil_is_adapter_not_authority():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    projected = CanonicalVeilBoundaryAdapter().project(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2"},
+    )
+
+    assert projected["authority"] == "canonical_veil"
+    assert projected["adapter_only"] is True
+
+def test_canonical_veil_adapter_does_not_emit_events():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    adapter = CanonicalVeilBoundaryAdapter()
+    assert not hasattr(adapter, "events")
+
+
+def test_canonical_veil_context_preserves_supplied_sequence():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    context = CanonicalVeilBoundaryAdapter().context(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+        lineage=[{"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
+    )
+
+    assert context["authority"] == "canonical_veil"
+    assert context["adapter_only"] is True
+    assert context["lineage"] == [
+        {"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
+    ]
+
+
+def test_mcp_does_not_derive_authoritative_lineage():
+    from pathlib import Path
+
+    source = Path("src/tools.py").read_text(encoding="utf-8")
+    assert 'CanonicalVaraSupervisorAdapter().build_context' not in source
+
+
+def test_missing_lineage_blocks_epistemic_state_emission_path():
+    from pathlib import Path
+
+    source = Path("src/tools.py").read_text(encoding="utf-8")
+    assert "if valid and lineage:" in source
+    assert "caller-supplied canonical lineage is required" in source
+
+
+def test_veil_context_does_not_invent_lineage():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    context = CanonicalVeilBoundaryAdapter().context(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+    )
+
+    assert context["lineage"] == []
