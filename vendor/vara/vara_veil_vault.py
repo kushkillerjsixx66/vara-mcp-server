@@ -58,27 +58,6 @@ def save_vault(entries: list) -> None:
     with open(VAULT_PATH, "w") as f:
         json.dump(entries, f, indent=2)
 
-def commit_to_vault(signals: list, scan_id: str, origin: str = "passed") -> VaultReport:
-    vault = load_vault()
-    timestamp = datetime.datetime.utcnow().isoformat()
-    new_entries = []
-    existing_ids = {e.get("signal_id") for e in vault}
-    for sig in signals:
-        sid = sig.get("signal_id") or sig.get("source_id") or str(uuid.uuid4())
-        if sid in existing_ids:
-            continue
-        vault_id = hashlib.sha256(f"{sid}:{scan_id}:{timestamp}".encode()).hexdigest()[:24]
-        entry = {
-            "vault_id": vault_id, "source_id": sig.get("source_id", ""),
-            "observation_id": sig.get("observation_id", ""), "signal_id": sid,
-            "scan_id": scan_id, "committed_at": timestamp, "signal": sig,
-            "origin": origin, "canonized": False,
-        }
-        vault.append(entry)
-        new_entries.append(entry)
-    save_vault(vault)
-    return VaultReport(str(uuid.uuid4()), scan_id, timestamp, len(new_entries), len(vault), new_entries)
-
 def run_veil(deferred_signals: list, scan_id: str) -> VeilReport:
     hold = load_veil_hold()
     timestamp = datetime.datetime.utcnow().isoformat()
