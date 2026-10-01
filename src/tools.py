@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from . import config
 from .canonical_vara import govern_operational_report
+from .canonical_veil import CanonicalVeilBoundaryAdapter
 
 # Make the operational Vara package importable
 if str(config.VARA_PACKAGE_PATH) not in sys.path:
@@ -122,11 +123,22 @@ def vara_run_scan(arguments: dict) -> dict:
 
     result = govern_operational_report(result, lineage)
     if supervisor_identity and supervisor_runtime:
-        from .canonical_vara import CanonicalVaraSupervisorAdapter
-        supervisor = CanonicalVaraSupervisorAdapter()
-        result["canonical_conformance"]["epistemic_state"] = supervisor.emit(
-            supervisor.build_context(supervisor_identity, supervisor_runtime)
-        )
+        veil = CanonicalVeilBoundaryAdapter()
+        valid, errors = veil.validate(supervisor_identity, supervisor_runtime)
+        result["canonical_conformance"]["veil_boundary"] = {
+            "authority": "canonical_veil",
+            "adapter_only": True,
+            "valid": valid,
+            "errors": errors,
+        }
+        if valid:
+            events = veil.events(
+                supervisor_identity,
+                supervisor_runtime,
+                seq=(lineage[0]["seq"] if lineage else 1),
+            )
+            result["canonical_conformance"]["epistemic_state"] = events[1]
+            result["canonical_conformance"]["runtime_state_event"] = events[0]
 
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
