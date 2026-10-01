@@ -271,8 +271,7 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         clustered, clusters = stage_cluster(normalized, config)
         sentinel_report = run_sentinel(clustered, scan_id)
         handoff = sentinel_to_vault_handoff(sentinel_report)
-        vault_report, veil_report = route_signals(
-            handoff["passed_signals"], handoff["deferred_signals"], scan_id)
+        veil_report = run_veil(handoff["deferred_signals"], scan_id)
         output_signals = handoff["passed_signals"] + list(getattr(veil_report, "promoted_signals", []) or [])
         sentinel_summary = {
             "sentinel_id": sentinel_report.sentinel_id,
