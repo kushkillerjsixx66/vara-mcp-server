@@ -1,4 +1,4 @@
-"""Canonical Vara conformance boundary for the MCP operational scan.
+""""Canonical Vara conformance boundary for the MCP operational scan.
 
 This module deliberately mirrors the canonical Vault scan contracts without
 creating a second promotion authority. The operational scan remains the
@@ -30,6 +30,9 @@ class CanonicalVaraScanResult:
 class CanonicalVaraIntegrity:
     def validate(self, scan: CanonicalVaraScanResult) -> tuple[bool, list[str]]:
         errors: list[str] = []
+
+        if not scan.lineage:
+            errors.append("lineage is required for canonical Vara status")
 
         for index, entry in enumerate(scan.lineage):
             missing = [key for key in REQUIRED_LINEAGE if key not in entry]
