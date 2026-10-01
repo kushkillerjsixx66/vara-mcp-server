@@ -112,7 +112,7 @@ def vara_run_scan(arguments: dict) -> dict:
     else:
         result = {"raw": str(report)}
 
-    result = govern_operational_report(result, lineage, config.CANONICAL_SCAN_ROOT)
+    result = govern_operational_report(result, lineage)
 
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
