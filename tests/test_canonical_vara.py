@@ -125,3 +125,48 @@ def test_veil_vendor_has_no_vault_commit_function():
     source = Path("vendor/vara/vara_veil_vault.py").read_text(encoding="utf-8")
     assert "def commit_to_vault" not in source
     assert "def route_signals" not in source
+
+
+def test_canonical_veil_requires_sovereignty_and_altitude():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    valid, errors = CanonicalVeilBoundaryAdapter().validate(
+        {"operator_id": "JRM-01", "role": "operator"},
+        {"state": "ACTIVE"},
+    )
+
+    assert valid is False
+    assert "identity missing: sovereignty" in errors
+    assert "runtime_state missing: altitude" in errors
+
+
+def test_canonical_veil_preserves_runtime_to_epistemic_order():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    events = CanonicalVeilBoundaryAdapter().events(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+        seq=7,
+    )
+
+    assert [event["type"] for event in events] == ["runtime_state", "epistemic_state"]
+    assert events[0]["source"] == "veil"
+    assert events[1]["source"] == "vara"
+    assert events[1]["payload"]["lineage"] == [{
+        "seq": 7,
+        "operator_id": "JRM-01",
+        "role": "operator",
+        "altitude": "A2",
+    }]
+
+
+def test_canonical_veil_is_adapter_not_authority():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    projected = CanonicalVeilBoundaryAdapter().project(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2"},
+    )
+
+    assert projected["authority"] == "canonical_veil"
+    assert projected["adapter_only"] is True
