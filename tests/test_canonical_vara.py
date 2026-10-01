@@ -125,3 +125,40 @@ def test_veil_vendor_has_no_vault_commit_function():
     source = Path("vendor/vara/vara_veil_vault.py").read_text(encoding="utf-8")
     assert "def commit_to_vault" not in source
     assert "def route_signals" not in source
+
+
+def test_canonical_veil_boundary_requires_sovereign_identity_and_altitude():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    adapter = CanonicalVeilBoundaryAdapter()
+    valid, errors = adapter.validate(
+        {"operator_id": "JRM-01", "role": "operator"},
+        {"state": "ACTIVE"},
+    )
+
+    assert valid is False
+    assert "identity missing: sovereignty" in errors
+    assert "runtime_state missing: altitude" in errors
+
+
+def test_canonical_veil_boundary_emits_runtime_then_epistemic_events():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    events = CanonicalVeilBoundaryAdapter().events(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+    )
+
+    assert [event["type"] for event in events] == ["runtime_state", "epistemic_state"]
+    assert events[0]["source"] == "veil"
+    assert events[1]["source"] == "vara"
+    assert events[1]["payload"]["lineage"][0]["altitude"] == "A2"
+
+
+def test_operational_scan_marks_output_as_unbound_until_canonical_promotion():
+    from pathlib import Path
+
+    source = Path("vendor/vara/vara_scan.py").read_text(encoding="utf-8")
+    assert '"vault_bound": 0' in source
+    assert '"promotion_authority": "canonical_vault_pipeline"' in source
+    assert '"veil_authority": "canonical_veil"' in source
