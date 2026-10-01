@@ -67,3 +67,18 @@ def test_integrity_matches_canonical_anomaly_contract():
     valid, errors = CanonicalVaraIntegrity().validate(scan)
     assert valid is False
     assert any("field/value/reason" in error for error in errors)
+
+
+def test_operational_planes_map_to_canonical_domains():
+    from src.canonical_vara import canonical_domains_for_plane, project_operational_report
+
+    assert canonical_domains_for_plane("tech") == ("ECON", "INDUSTRIAL")
+    assert canonical_domains_for_plane("geopolitical") == ("GEOPOL", "WORLDPOL")
+    assert canonical_domains_for_plane("dark") == ("CRYPTO",)
+    assert canonical_domains_for_plane("unknown") == ("ECON",)
+
+    result, _ = project_operational_report(
+        {"signals": [{"signal_id": "s1", "content": "x", "plane": "geopolitical"}]},
+        [{"seq": "004", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
+    )
+    assert result.weak_signals[0]["canonical_domains"] == ["GEOPOL", "WORLDPOL"]
