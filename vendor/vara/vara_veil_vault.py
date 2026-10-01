@@ -2,7 +2,7 @@
 VARA Veil + Vault — Mediation and Persistence Layer (MCP vendor copy)
 """
 from __future__ import annotations
-import json, os, datetime, hashlib, uuid
+import json, os, datetime, uuid
 from dataclasses import dataclass
 from typing import Optional
 
