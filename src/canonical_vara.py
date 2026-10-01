@@ -95,7 +95,12 @@ def _signal_to_weak(signal: dict[str, Any], index: int) -> dict[str, Any]:
         or signal.get("observation_id")
         or ""
     )
-    return {"key": key, "description": description, "evidence": evidence}
+    return {
+        "key": key,
+        "description": description,
+        "evidence": evidence,
+        "canonical_domains": list(canonical_domains_for_plane(signal.get("plane"))),
+    }
 
 
 def project_operational_report(
