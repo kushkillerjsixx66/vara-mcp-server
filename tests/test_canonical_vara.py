@@ -140,24 +140,25 @@ def test_canonical_veil_requires_sovereignty_and_altitude():
     assert "runtime_state missing: altitude" in errors
 
 
-def test_canonical_veil_preserves_runtime_to_epistemic_order():
+def test_canonical_veil_preserves_supplied_boundary_context():
     from src.canonical_veil import CanonicalVeilBoundaryAdapter
 
-    events = CanonicalVeilBoundaryAdapter().events(
+    context = CanonicalVeilBoundaryAdapter().context(
         {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
         {"altitude": "A2", "state": "ACTIVE"},
         seq=7,
     )
 
-    assert [event["type"] for event in events] == ["runtime_state", "epistemic_state"]
-    assert events[0]["source"] == "veil"
-    assert events[1]["source"] == "vara"
-    assert events[1]["payload"]["lineage"] == [{
+    assert context["authority"] == "canonical_veil"
+    assert context["adapter_only"] is True
+    assert context["identity"]["operator_id"] == "JRM-01"
+    assert context["runtime"]["altitude"] == "A2"
+    assert context["lineage"] == {
         "seq": 7,
         "operator_id": "JRM-01",
         "role": "operator",
         "altitude": "A2",
-    }]
+    }
 
 
 def test_canonical_veil_is_adapter_not_authority():
