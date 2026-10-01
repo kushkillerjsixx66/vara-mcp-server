@@ -92,13 +92,3 @@ def run_veil(deferred_signals: list, scan_id: str) -> VeilReport:
     return VeilReport(str(uuid.uuid4()), scan_id, timestamp, len(deferred_signals),
                       len(promoted), held_over, expired, promoted,
                       [v for v in hold.values() if isinstance(v, dict) and v.get("status") == "HELD"])
-
-def route_signals(passed_signals: list, deferred_signals: list, scan_id: str) -> tuple:
-    vault_report = commit_to_vault(passed_signals, scan_id, origin="passed")
-    veil_report = run_veil(deferred_signals, scan_id)
-    if veil_report.promoted_signals:
-        promo = commit_to_vault(veil_report.promoted_signals, scan_id, origin="veil_promoted")
-        vault_report.committed += promo.committed
-        vault_report.total_vault_size = promo.total_vault_size
-        vault_report.new_entries.extend(promo.new_entries)
-    return vault_report, veil_report
