@@ -34,3 +34,36 @@ def test_lineage_is_preserved_exactly():
     result, _ = project_operational_report({"signals": []}, lineage)
 
     assert result.lineage == lineage
+
+
+def test_governance_emits_canonical_pipeline_event_without_local_persistence():
+    from src.canonical_vara import govern_operational_report
+
+    result = govern_operational_report(
+        {"signals": [{"signal_id": "s1", "content": "x"}]},
+        [{"seq": "002", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
+    )
+
+    conformance = result["canonical_conformance"]
+    assert conformance["promotion_allowed"] is True
+    event = conformance["promotion_event"]
+    assert event["type"] == "vault_promotion"
+    assert event["source"] == "vara_scan_pipeline"
+    assert event["dispatch"] == "canonical_vault_pipeline_required"
+    assert "promotion_path" not in conformance
+
+
+def test_integrity_matches_canonical_anomaly_contract():
+    from src.canonical_vara import CanonicalVaraScanResult
+
+    scan = CanonicalVaraScanResult(
+        weak_signals=[],
+        trends=[],
+        anomalies=[{"field": "novelty", "reason": "drift"}],
+        unspecified=[],
+        lineage=[{"seq": "003", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
+    )
+
+    valid, errors = CanonicalVaraIntegrity().validate(scan)
+    assert valid is False
+    assert any("field/value/reason" in error for error in errors)
