@@ -170,3 +170,25 @@ def test_canonical_veil_is_adapter_not_authority():
 
     assert projected["authority"] == "canonical_veil"
     assert projected["adapter_only"] is True
+
+def test_canonical_veil_adapter_does_not_emit_events():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    adapter = CanonicalVeilBoundaryAdapter()
+    assert not hasattr(adapter, "events")
+
+
+def test_canonical_veil_context_preserves_supplied_sequence():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    context = CanonicalVeilBoundaryAdapter().context(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+        seq=7,
+    )
+
+    assert context["authority"] == "canonical_veil"
+    assert context["adapter_only"] is True
+    assert context["lineage"]["seq"] == 7
+    assert context["lineage"]["operator_id"] == "JRM-01"
+    assert context["lineage"]["altitude"] == "A2"
