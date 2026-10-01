@@ -140,6 +140,7 @@ def test_canonical_veil_requires_sovereignty_and_altitude():
     assert "runtime_state missing: altitude" in errors
 
 
+# Canonical boundary regression: Veil validates context but does not emit events.
 def test_canonical_veil_preserves_supplied_boundary_context():
     from src.canonical_veil import CanonicalVeilBoundaryAdapter
 
