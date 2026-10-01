@@ -99,6 +99,8 @@ def test_supervisor_adapter_derives_canonical_lineage_and_event():
     assert context["lineage"] == [
         {"seq": 1, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
     ]
+    assert context["canonical_authority"] is False
+    assert context["derived_context"] is True
 
     event = adapter.emit(context)
     assert event["type"] == "epistemic_state"
@@ -194,3 +196,18 @@ def test_canonical_veil_context_preserves_supplied_sequence():
     assert context["lineage"]["seq"] == 7
     assert context["lineage"]["operator_id"] == "JRM-01"
     assert context["lineage"]["altitude"] == "A2"
+
+
+def test_mcp_does_not_derive_authoritative_lineage():
+    from pathlib import Path
+
+    source = Path("src/tools.py").read_text(encoding="utf-8")
+    assert 'CanonicalVaraSupervisorAdapter().build_context' not in source
+
+
+def test_missing_lineage_blocks_epistemic_state_emission_path():
+    from pathlib import Path
+
+    source = Path("src/tools.py").read_text(encoding="utf-8")
+    assert "if valid and lineage:" in source
+    assert "caller-supplied canonical lineage is required" in source
