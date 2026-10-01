@@ -15,7 +15,7 @@ OUTPUT_DIR = VARA_DATA_ROOT / "vara_output"
 VAULT_SIGNALS_PATH = VARA_DATA_ROOT / "vault_signals.json"
 VEIL_HOLD_PATH = VARA_DATA_ROOT / "veil_hold.json"
 VEIL_TRAJECTORIES_PATH = VARA_DATA_ROOT / "veil_trajectories.json"
-DRIFT_LOG_PATH = VARA_DATA_ROOT / "vara_drift_log.json"
+DRIFT_LOG_PATH = VARA_DATA_ROOT / "vara_drift_log.json"\nCANONICAL_SCAN_ROOT = VARA_DATA_ROOT / "vault" / "vara_scans"
 
 HOST = os.environ.get("VARA_MCP_HOST", "0.0.0.0")
 PORT = int(os.environ.get("VARA_MCP_PORT", "8000"))
