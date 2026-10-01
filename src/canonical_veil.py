@@ -38,21 +38,19 @@ class CanonicalVeilBoundaryAdapter:
             "adapter_only": True,
         }
 
-    def context(self, identity: dict[str, Any], runtime_state: dict[str, Any], seq: int | None = None) -> dict[str, Any]:
-        """Return boundary context without emitting canonical events."""
+    def context(
+        self,
+        identity: dict[str, Any],
+        runtime_state: dict[str, Any],
+        lineage: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Return boundary context without manufacturing lineage or events."""
         projected = self.project(identity, runtime_state)
-        lineage = {
-            "operator_id": identity["operator_id"],
-            "role": identity["role"],
-            "altitude": runtime_state["altitude"],
-        }
-        if seq is not None:
-            lineage["seq"] = seq
         return {
             "identity": projected["identity"],
             "runtime": projected["runtime"],
             "authority": projected["authority"],
             "canonical": projected["canonical"],
             "adapter_only": projected["adapter_only"],
-            "lineage": lineage,
+            "lineage": list(lineage or []),
         }
