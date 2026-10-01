@@ -132,7 +132,7 @@ def vara_run_scan(arguments: dict) -> dict:
             veil_context = veil.context(
                 supervisor_identity,
                 supervisor_runtime,
-                seq=lineage[0]["seq"],
+                lineage=lineage,
             )
             from .canonical_vara import CanonicalVaraSupervisorAdapter
             supervisor = CanonicalVaraSupervisorAdapter()
