@@ -132,13 +132,18 @@ def vara_run_scan(arguments: dict) -> dict:
             "errors": errors,
         }
         if valid:
-            events = veil.events(
+            veil_context = veil.context(
                 supervisor_identity,
                 supervisor_runtime,
-                seq=(lineage[0]["seq"] if lineage else 1),
+                seq=(lineage[0]["seq"] if lineage else None),
             )
-            result["canonical_conformance"]["epistemic_state"] = events[1]
-            result["canonical_conformance"]["runtime_state_event"] = events[0]
+            from .canonical_vara import CanonicalVaraSupervisorAdapter
+            supervisor = CanonicalVaraSupervisorAdapter()
+            result["canonical_conformance"]["epistemic_state"] = supervisor.emit({
+                "identity": veil_context["identity"],
+                "runtime": veil_context["runtime"],
+                "lineage": [veil_context["lineage"]],
+            })
 
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
