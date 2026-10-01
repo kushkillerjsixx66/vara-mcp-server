@@ -11,7 +11,7 @@ import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from . import config
+from . import config\nfrom .canonical_vara import govern_operational_report
 
 # Make the operational Vara package importable
 if str(config.VARA_PACKAGE_PATH) not in sys.path:
@@ -48,7 +48,7 @@ def vara_run_scan(arguments: dict) -> dict:
 
     keywords = arguments.get("keywords") or ["AI", "agentic", "compute"]
     planes = arguments.get("active_planes") or list(config.DEFAULT_PLANES)
-    sweep = int(arguments.get("sweep_depth_hours") or config.DEFAULT_SWEEP_HOURS)
+    sweep = int(arguments.get("sweep_depth_hours") or config.DEFAULT_SWEEP_HOURS)\n    lineage = arguments.get("lineage")
     label = arguments.get("scan_label") or f"mcp_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M')}"
 
     cfg_kwargs = {
@@ -110,7 +110,7 @@ def vara_run_scan(arguments: dict) -> dict:
     else:
         result = {"raw": str(report)}
 
-    if arguments.get("generate_fir"):
+    result = govern_operational_report(result, lineage, config.CANONICAL_SCAN_ROOT)\n\n    if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
 
     return result
