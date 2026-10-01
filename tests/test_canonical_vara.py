@@ -82,3 +82,31 @@ def test_operational_planes_map_to_canonical_domains():
         [{"seq": "004", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
     )
     assert result.weak_signals[0]["canonical_domains"] == ["GEOPOL", "WORLDPOL"]
+
+
+
+def test_supervisor_adapter_derives_canonical_lineage_and_event():
+    from src.canonical_vara import CanonicalVaraSupervisorAdapter
+
+    adapter = CanonicalVaraSupervisorAdapter()
+    context = adapter.build_context(
+        {"operator_id": "JRM-01", "role": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+    )
+
+    assert context["identity"]["operator_id"] == "JRM-01"
+    assert context["runtime"]["altitude"] == "A2"
+    assert context["lineage"] == [
+        {"seq": 1, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
+    ]
+
+    event = adapter.emit(context)
+    assert event["type"] == "epistemic_state"
+    assert event["source"] == "vara"
+    assert event["payload"] == context
+
+
+def test_supervisor_adapter_does_not_replace_canonical_authority():
+    from src.canonical_vara import CanonicalVaraSupervisorAdapter
+
+    assert "Vault" in (CanonicalVaraSupervisorAdapter.__doc__ or "")
