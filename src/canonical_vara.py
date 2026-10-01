@@ -211,9 +211,22 @@ def govern_operational_report(
     }
 
     if promotion_allowed:
-        result["canonical_conformance"]["promotion_event"] = {
-            "type": "vault_promotion",
+        result["canonical_conformance"]["promotion_handoff"] = {
+            "type": "vault_promotion_request",
             "source": "vara_scan_pipeline",
+            "target": "canonical_vault_pipeline",
+            "status": "eligible_not_executed",
+            "authority": "canonical_vault",
+            "execution": {
+                "requested": False,
+                "executed": False,
+                "committed": False,
+            },
+            "reason": (
+                "Public Vara MCP may declare canonical promotion eligibility "
+                "and carry the canonical payload, but it is not the canonical "
+                "Vault pipeline and does not execute or commit promotion."
+            ),
             "payload": {
                 "lineage": canonical.lineage,
                 "scan": result["canonical"],
