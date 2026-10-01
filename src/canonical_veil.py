@@ -1,7 +1,8 @@
 """Canonical Veil boundary adapter.
 
-The MCP exposes the canonical Veil contract without becoming a second Veil.
-Canonical runtime authority remains in Canonical Vault.
+The MCP validates and projects caller-supplied Veil context. It does not
+manufacture canonical runtime or epistemic events. Canonical Vault remains
+authoritative for Veil runtime execution.
 """
 
 from __future__ import annotations
@@ -15,11 +16,7 @@ class CanonicalVeilBoundaryAdapter:
     REQUIRED_IDENTITY = ("operator_id", "role", "sovereignty")
     REQUIRED_RUNTIME = ("altitude",)
 
-    def validate(
-        self,
-        identity: dict[str, Any],
-        runtime_state: dict[str, Any],
-    ) -> tuple[bool, list[str]]:
+    def validate(self, identity: dict[str, Any], runtime_state: dict[str, Any]) -> tuple[bool, list[str]]:
         errors: list[str] = []
         for key in self.REQUIRED_IDENTITY:
             if identity.get(key) is None:
@@ -29,15 +26,10 @@ class CanonicalVeilBoundaryAdapter:
                 errors.append(f"runtime_state missing: {key}")
         return not errors, errors
 
-    def project(
-        self,
-        identity: dict[str, Any],
-        runtime_state: dict[str, Any],
-    ) -> dict[str, Any]:
+    def project(self, identity: dict[str, Any], runtime_state: dict[str, Any]) -> dict[str, Any]:
         valid, errors = self.validate(identity, runtime_state)
         if not valid:
             raise ValueError("; ".join(errors))
-
         return {
             "identity": dict(identity),
             "runtime": dict(runtime_state),
@@ -46,36 +38,21 @@ class CanonicalVeilBoundaryAdapter:
             "adapter_only": True,
         }
 
-    def events(
-        self,
-        identity: dict[str, Any],
-        runtime_state: dict[str, Any],
-        seq: int = 1,
-    ) -> list[dict[str, Any]]:
-        context = self.project(identity, runtime_state)
-        lineage = [{
-            "seq": seq,
+    def context(self, identity: dict[str, Any], runtime_state: dict[str, Any], seq: int | None = None) -> dict[str, Any]:
+        """Return boundary context without emitting canonical events."""
+        projected = self.project(identity, runtime_state)
+        lineage = {
             "operator_id": identity["operator_id"],
             "role": identity["role"],
             "altitude": runtime_state["altitude"],
-        }]
-
-        return [
-            {
-                "type": "runtime_state",
-                "source": "veil",
-                "payload": {
-                    "identity": context["identity"],
-                    **context["runtime"],
-                },
-            },
-            {
-                "type": "epistemic_state",
-                "source": "vara",
-                "payload": {
-                    "identity": context["identity"],
-                    "runtime": context["runtime"],
-                    "lineage": lineage,
-                },
-            },
-        ]
+        }
+        if seq is not None:
+            lineage["seq"] = seq
+        return {
+            "identity": projected["identity"],
+            "runtime": projected["runtime"],
+            "authority": projected["authority"],
+            "canonical": projected["canonical"],
+            "adapter_only": projected["adapter_only"],
+            "lineage": lineage,
+        }
