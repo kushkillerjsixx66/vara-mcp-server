@@ -310,8 +310,7 @@ def _render_fir_from_report(report: dict, arguments: dict) -> str:
         "",
         f"VARA:SCAN {report.get('scan_id','')[:8]} · COMPILED BY OPERATOR INTELLIGENCE LAYER",
     ]
-    return "
-".join(lines)
+    return "\n".join(lines)
 
 
 def vara_generate_fir(arguments: dict) -> dict:
