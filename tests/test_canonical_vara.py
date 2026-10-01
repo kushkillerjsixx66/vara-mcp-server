@@ -149,19 +149,16 @@ def test_canonical_veil_preserves_supplied_boundary_context():
     context = CanonicalVeilBoundaryAdapter().context(
         {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
         {"altitude": "A2", "state": "ACTIVE"},
-        seq=7,
+        lineage=[{"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
     )
 
     assert context["authority"] == "canonical_veil"
     assert context["adapter_only"] is True
     assert context["identity"]["operator_id"] == "JRM-01"
     assert context["runtime"]["altitude"] == "A2"
-    assert context["lineage"] == {
-        "seq": 7,
-        "operator_id": "JRM-01",
-        "role": "operator",
-        "altitude": "A2",
-    }
+    assert context["lineage"] == [
+        {"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
+    ]
 
 
 def test_canonical_veil_is_adapter_not_authority():
@@ -188,14 +185,14 @@ def test_canonical_veil_context_preserves_supplied_sequence():
     context = CanonicalVeilBoundaryAdapter().context(
         {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
         {"altitude": "A2", "state": "ACTIVE"},
-        seq=7,
+        lineage=[{"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
     )
 
     assert context["authority"] == "canonical_veil"
     assert context["adapter_only"] is True
-    assert context["lineage"]["seq"] == 7
-    assert context["lineage"]["operator_id"] == "JRM-01"
-    assert context["lineage"]["altitude"] == "A2"
+    assert context["lineage"] == [
+        {"seq": 7, "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
+    ]
 
 
 def test_mcp_does_not_derive_authoritative_lineage():
@@ -211,3 +208,14 @@ def test_missing_lineage_blocks_epistemic_state_emission_path():
     source = Path("src/tools.py").read_text(encoding="utf-8")
     assert "if valid and lineage:" in source
     assert "caller-supplied canonical lineage is required" in source
+
+
+def test_veil_context_does_not_invent_lineage():
+    from src.canonical_veil import CanonicalVeilBoundaryAdapter
+
+    context = CanonicalVeilBoundaryAdapter().context(
+        {"operator_id": "JRM-01", "role": "operator", "sovereignty": "operator"},
+        {"altitude": "A2", "state": "ACTIVE"},
+    )
+
+    assert context["lineage"] == []
