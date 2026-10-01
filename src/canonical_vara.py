@@ -15,6 +15,27 @@ from typing import Any
 
 REQUIRED_LINEAGE = ("seq", "operator_id", "role", "altitude")
 
+# Canonical Vara domain taxonomy. Operational planes are acquisition labels;
+# these are the domains consumed by the canonical dispatcher/DIP pipeline.
+PLANE_TO_CANONICAL_DOMAINS: dict[str, tuple[str, ...]] = {
+    "tech": ("ECON", "INDUSTRIAL"),
+    "scientific": ("ECON", "INDUSTRIAL"),
+    "adjacent_possible": ("ECON", "INDUSTRIAL"),
+    "economic": ("ECON",),
+    "geopolitical": ("GEOPOL", "WORLDPOL"),
+    "social": ("WORLDPOL",),
+    "persons": ("WORLDPOL",),
+    "dark": ("CRYPTO",),
+}
+CANONICAL_DOMAIN_FALLBACK = "ECON"
+
+def canonical_domains_for_plane(plane: str | None) -> tuple[str, ...]:
+    """Map an operational Vara plane to canonical dispatcher domains."""
+    return PLANE_TO_CANONICAL_DOMAINS.get(
+        (plane or "").strip().lower(),
+        (CANONICAL_DOMAIN_FALLBACK,),
+    )
+
 
 @dataclass
 class CanonicalVaraScanResult:
