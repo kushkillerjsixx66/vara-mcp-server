@@ -46,10 +46,21 @@ def test_governance_emits_canonical_pipeline_event_without_local_persistence():
 
     conformance = result["canonical_conformance"]
     assert conformance["promotion_allowed"] is True
-    event = conformance["promotion_event"]
-    assert event["type"] == "vault_promotion"
-    assert event["source"] == "vara_scan_pipeline"
-    assert event["dispatch"] == "canonical_vault_pipeline_required"
+    handoff = conformance["promotion_handoff"]
+    assert handoff["type"] == "vault_promotion_request"
+    assert handoff["source"] == "vara_scan_pipeline"
+    assert handoff["target"] == "canonical_vault_pipeline"
+    assert handoff["status"] == "eligible_not_executed"
+    assert handoff["authority"] == "canonical_vault"
+    assert handoff["execution"] == {
+        "requested": False,
+        "executed": False,
+        "committed": False,
+    }
+    assert handoff["dispatch"] == "canonical_vault_pipeline_required"
+    assert handoff["payload"]["lineage"] == [
+        {"seq": "002", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
+    ]
     assert "promotion_path" not in conformance
 
 
@@ -219,3 +230,19 @@ def test_veil_context_does_not_invent_lineage():
     )
 
     assert context["lineage"] == []
+
+
+
+def test_public_mcp_never_claims_vault_promotion_execution():
+    from src.canonical_vara import govern_operational_report
+
+    result = govern_operational_report(
+        {"signals": [{"signal_id": "s1", "content": "x"}]},
+        [{"seq": "005", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
+    )
+
+    handoff = result["canonical_conformance"]["promotion_handoff"]
+    assert handoff["status"] == "eligible_not_executed"
+    assert handoff["execution"]["executed"] is False
+    assert handoff["execution"]["committed"] is False
+    assert "promoted" not in handoff["status"]

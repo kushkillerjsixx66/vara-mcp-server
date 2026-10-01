@@ -4,7 +4,7 @@ from __future__ import annotations
 TOOLS = [
     {
         "name": "vara_run_scan",
-        "description": "Execute a full Real Vara scan using the operational dual-track, multi-timescale pipeline. Returns a VaraScanReport.",
+        "description": "Execute a full Real Vara scan using the operational dual-track, multi-timescale pipeline. Returns a VaraScanReport plus canonical conformance and, when eligible, a non-executing handoff request for the canonical Vault pipeline.",
         "annotations": {
             "readOnlyHint": False,
             "destructiveHint": False,
@@ -41,6 +41,7 @@ TOOLS = [
                         "state": {"type": "string"},
                     },
                 },
+                "canonical_promotion": {"type": "string", "description": "Canonical promotion is eligibility only. The public MCP never executes or commits Vault promotion; eligible results carry a governed handoff payload for the canonical Vault pipeline."},
                 "lineage": {
                     "type": "array",
                     "description": "Caller-supplied canonical Vara lineage entries. Required for canonical status and promotion; MCP never derives authoritative lineage.",
