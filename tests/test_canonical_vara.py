@@ -110,3 +110,18 @@ def test_supervisor_adapter_does_not_replace_canonical_authority():
     from src.canonical_vara import CanonicalVaraSupervisorAdapter
 
     assert "Vault" in (CanonicalVaraSupervisorAdapter.__doc__ or "")
+
+
+
+def test_operational_scan_cannot_call_independent_vault_writer():
+    from pathlib import Path
+    source = Path("vendor/vara/vara_scan.py").read_text(encoding="utf-8")
+    assert "route_signals(" not in source
+    assert "commit_to_vault(" not in source
+
+
+def test_veil_vendor_has_no_vault_commit_function():
+    from pathlib import Path
+    source = Path("vendor/vara/vara_veil_vault.py").read_text(encoding="utf-8")
+    assert "def commit_to_vault" not in source
+    assert "def route_signals" not in source
