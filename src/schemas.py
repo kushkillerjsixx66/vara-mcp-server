@@ -41,7 +41,7 @@ TOOLS = [
                         "state": {"type": "string"},
                     },
                 },
-                "promotion semantics": {"type": "string", "description": "Canonical promotion is eligibility only. The public MCP never executes or commits Vault promotion; eligible results carry a governed handoff payload for the canonical Vault pipeline."},
+                "canonical_promotion": {"type": "string", "description": "Canonical promotion is eligibility only. The public MCP never executes or commits Vault promotion; eligible results carry a governed handoff payload for the canonical Vault pipeline."},
                 "lineage": {
                     "type": "array",
                     "description": "Caller-supplied canonical Vara lineage entries. Required for canonical status and promotion; MCP never derives authoritative lineage.",
