@@ -1,9 +1,4 @@
-"""Vara MCP Server.
-
-Native MCP Streamable HTTP surface mounted at /api/mcp.
-The tool implementations remain in src.tools; this module owns the
-protocol boundary and MCP tool registration.
-"""
+"""Vara MCP Server using the official MCP Streamable HTTP transport."""
 
 from __future__ import annotations
 
@@ -12,74 +7,11 @@ from typing import Any, Literal
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from . import config
 from .tools import call_tool
-
-
-class RunScanArgs(BaseModel):
-    keywords: list[str] | None = None
-    active_planes: list[
-        Literal[
-            "social",
-            "scientific",
-            "tech",
-            "adjacent_possible",
-            "economic",
-            "dark",
-            "geopolitical",
-            "persons",
-            "firecrawl",
-        ]
-    ] | None = None
-    sweep_depth_hours: int = Field(default=24, ge=1, le=720)
-    scan_label: str | None = None
-    enable_dual_track: bool = True
-    high_novelty_floor: float = 0.15
-    weak_novelty_floor: float = 0.05
-    enable_multi_timescale: bool = True
-    use_firecrawl: bool = False
-    generate_fir: bool = False
-
-
-class ListScansArgs(BaseModel):
-    limit: int = Field(default=20, ge=1, le=100)
-    since: str | None = None
-    label_contains: str | None = None
-
-
-class GetScanArgs(BaseModel):
-    scan_id: str
-    include_signals: bool = True
-
-
-class QuerySignalsArgs(BaseModel):
-    plane: str | None = None
-    min_novelty: float | None = Field(default=None, ge=0, le=1)
-    entity: str | None = None
-    since: str | None = None
-    until: str | None = None
-    origin: Literal["passed", "veil_promoted", "any"] = "any"
-    canonized_only: bool = False
-    include_veil_hold: bool = False
-    limit: int = Field(default=50, ge=1, le=200)
-
-
-class VeilStateArgs(BaseModel):
-    plane: str | None = None
-    signal_id: str | None = None
-    include_trajectories: bool = True
-
-
-class GenerateFIRArgs(BaseModel):
-    scan_id: str
-    series: str | None = None
-    baseline: str | None = None
-    format: Literal["operator_tier", "lightweight"] = "operator_tier"
-    next_cycle_hint: str | None = None
 
 
 mcp = FastMCP(
@@ -90,8 +22,8 @@ mcp = FastMCP(
 )
 
 
-def _call(name: str, args: BaseModel) -> Any:
-    return call_tool(name, args.model_dump(exclude_none=True))
+def _call(name: str, arguments: dict[str, Any]) -> Any:
+    return call_tool(name, arguments)
 
 
 @mcp.tool(
@@ -107,8 +39,44 @@ def _call(name: str, args: BaseModel) -> Any:
         open_world_hint=True,
     ),
 )
-def vara_run_scan(args: RunScanArgs) -> Any:
-    return _call("vara_run_scan", args)
+def vara_run_scan(
+    keywords: list[str] | None = None,
+    active_planes: list[
+        Literal[
+            "social",
+            "scientific",
+            "tech",
+            "adjacent_possible",
+            "economic",
+            "dark",
+            "geopolitical",
+            "persons",
+            "firecrawl",
+        ]
+    ]
+    | None = None,
+    sweep_depth_hours: int = 24,
+    scan_label: str | None = None,
+    enable_dual_track: bool = True,
+    high_novelty_floor: float = 0.15,
+    weak_novelty_floor: float = 0.05,
+    enable_multi_timescale: bool = True,
+    use_firecrawl: bool = False,
+    generate_fir: bool = False,
+) -> Any:
+    arguments = {
+        "keywords": keywords,
+        "active_planes": active_planes,
+        "sweep_depth_hours": sweep_depth_hours,
+        "scan_label": scan_label,
+        "enable_dual_track": enable_dual_track,
+        "high_novelty_floor": high_novelty_floor,
+        "weak_novelty_floor": weak_novelty_floor,
+        "enable_multi_timescale": enable_multi_timescale,
+        "use_firecrawl": use_firecrawl,
+        "generate_fir": generate_fir,
+    }
+    return _call("vara_run_scan", {k: v for k, v in arguments.items() if v is not None})
 
 
 @mcp.tool(
@@ -121,8 +89,13 @@ def vara_run_scan(args: RunScanArgs) -> Any:
         open_world_hint=False,
     ),
 )
-def vara_list_scans(args: ListScansArgs = ListScansArgs()) -> Any:
-    return _call("vara_list_scans", args)
+def vara_list_scans(
+    limit: int = 20,
+    since: str | None = None,
+    label_contains: str | None = None,
+) -> Any:
+    arguments = {"limit": limit, "since": since, "label_contains": label_contains}
+    return _call("vara_list_scans", {k: v for k, v in arguments.items() if v is not None})
 
 
 @mcp.tool(
@@ -135,8 +108,14 @@ def vara_list_scans(args: ListScansArgs = ListScansArgs()) -> Any:
         open_world_hint=False,
     ),
 )
-def vara_get_scan(args: GetScanArgs) -> Any:
-    return _call("vara_get_scan", args)
+def vara_get_scan(
+    scan_id: str,
+    include_signals: bool = True,
+) -> Any:
+    return _call(
+        "vara_get_scan",
+        {"scan_id": scan_id, "include_signals": include_signals},
+    )
 
 
 @mcp.tool(
@@ -149,8 +128,29 @@ def vara_get_scan(args: GetScanArgs) -> Any:
         open_world_hint=False,
     ),
 )
-def vara_query_signals(args: QuerySignalsArgs = QuerySignalsArgs()) -> Any:
-    return _call("vara_query_signals", args)
+def vara_query_signals(
+    plane: str | None = None,
+    min_novelty: float | None = None,
+    entity: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    origin: Literal["passed", "veil_promoted", "any"] = "any",
+    canonized_only: bool = False,
+    include_veil_hold: bool = False,
+    limit: int = 50,
+) -> Any:
+    arguments = {
+        "plane": plane,
+        "min_novelty": min_novelty,
+        "entity": entity,
+        "since": since,
+        "until": until,
+        "origin": origin,
+        "canonized_only": canonized_only,
+        "include_veil_hold": include_veil_hold,
+        "limit": limit,
+    }
+    return _call("vara_query_signals", {k: v for k, v in arguments.items() if v is not None})
 
 
 @mcp.tool(
@@ -163,8 +163,17 @@ def vara_query_signals(args: QuerySignalsArgs = QuerySignalsArgs()) -> Any:
         open_world_hint=False,
     ),
 )
-def vara_get_veil_state(args: VeilStateArgs = VeilStateArgs()) -> Any:
-    return _call("vara_get_veil_state", args)
+def vara_get_veil_state(
+    plane: str | None = None,
+    signal_id: str | None = None,
+    include_trajectories: bool = True,
+) -> Any:
+    arguments = {
+        "plane": plane,
+        "signal_id": signal_id,
+        "include_trajectories": include_trajectories,
+    }
+    return _call("vara_get_veil_state", {k: v for k, v in arguments.items() if v is not None})
 
 
 @mcp.tool(
@@ -177,8 +186,21 @@ def vara_get_veil_state(args: VeilStateArgs = VeilStateArgs()) -> Any:
         open_world_hint=False,
     ),
 )
-def vara_generate_fir(args: GenerateFIRArgs) -> Any:
-    return _call("vara_generate_fir", args)
+def vara_generate_fir(
+    scan_id: str,
+    series: str | None = None,
+    baseline: str | None = None,
+    format: Literal["operator_tier", "lightweight"] = "operator_tier",
+    next_cycle_hint: str | None = None,
+) -> Any:
+    arguments = {
+        "scan_id": scan_id,
+        "series": series,
+        "baseline": baseline,
+        "format": format,
+        "next_cycle_hint": next_cycle_hint,
+    }
+    return _call("vara_generate_fir", {k: v for k, v in arguments.items() if v is not None})
 
 
 @mcp.custom_route("/health", methods=["GET"])
@@ -225,9 +247,7 @@ app.add_middleware(
     expose_headers=["Mcp-Session-Id"],
 )
 
-# The native MCP app owns the protocol endpoint. Mounting at /api/mcp while
-# configuring streamable_http_path="/" keeps the public URL exactly
-# https://.../api/mcp, matching the canonical-vault deployment.
+# Native Streamable HTTP endpoint: https://.../api/mcp
 app.mount("/api/mcp", mcp_http_app)
 
 
