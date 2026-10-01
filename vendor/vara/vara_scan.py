@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, List
 
 from vara_sentinel import run_sentinel, sentinel_to_vault_handoff
-from vara_veil_vault import route_signals
+from vara_veil_vault import run_veil
 
 logger = logging.getLogger("vara.scan")
 
@@ -257,7 +257,7 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         handoff_weak = sentinel_to_vault_handoff(sentinel_weak)
         passed = handoff_high["passed_signals"] + handoff_weak["passed_signals"]
         deferred = handoff_high["deferred_signals"] + handoff_weak["deferred_signals"]
-        vault_report, veil_report = route_signals(passed, deferred, scan_id)
+        veil_report = run_veil(deferred, scan_id)
         output_signals = passed + list(getattr(veil_report, "promoted_signals", []) or [])
         sentinel_summary = {
             "high": {"passed": sentinel_high.passed, "blocked": sentinel_high.blocked,
@@ -271,8 +271,7 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         clustered, clusters = stage_cluster(normalized, config)
         sentinel_report = run_sentinel(clustered, scan_id)
         handoff = sentinel_to_vault_handoff(sentinel_report)
-        vault_report, veil_report = route_signals(
-            handoff["passed_signals"], handoff["deferred_signals"], scan_id)
+        veil_report = run_veil(handoff["deferred_signals"], scan_id)
         output_signals = handoff["passed_signals"] + list(getattr(veil_report, "promoted_signals", []) or [])
         sentinel_summary = {
             "sentinel_id": sentinel_report.sentinel_id,

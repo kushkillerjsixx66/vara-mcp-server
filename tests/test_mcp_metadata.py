@@ -56,3 +56,11 @@ def test_all_mcp_tools_have_input_schemas():
     for tool in TOOLS:
         assert isinstance(tool["inputSchema"], dict)
         assert tool["inputSchema"]["type"] == "object"
+
+
+def test_run_scan_exposes_canonical_lineage_input():
+    schema = next(tool["inputSchema"] for tool in TOOLS if tool["name"] == "vara_run_scan")
+    lineage = schema["properties"]["lineage"]
+
+    assert lineage["type"] == "array"
+    assert lineage["items"]["required"] == ["seq", "operator_id", "role", "altitude"]

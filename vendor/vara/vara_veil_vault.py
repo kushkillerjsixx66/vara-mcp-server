@@ -2,7 +2,7 @@
 VARA Veil + Vault — Mediation and Persistence Layer (MCP vendor copy)
 """
 from __future__ import annotations
-import json, os, datetime, hashlib, uuid
+import json, os, datetime, uuid
 from dataclasses import dataclass
 from typing import Optional
 
@@ -58,27 +58,6 @@ def save_vault(entries: list) -> None:
     with open(VAULT_PATH, "w") as f:
         json.dump(entries, f, indent=2)
 
-def commit_to_vault(signals: list, scan_id: str, origin: str = "passed") -> VaultReport:
-    vault = load_vault()
-    timestamp = datetime.datetime.utcnow().isoformat()
-    new_entries = []
-    existing_ids = {e.get("signal_id") for e in vault}
-    for sig in signals:
-        sid = sig.get("signal_id") or sig.get("source_id") or str(uuid.uuid4())
-        if sid in existing_ids:
-            continue
-        vault_id = hashlib.sha256(f"{sid}:{scan_id}:{timestamp}".encode()).hexdigest()[:24]
-        entry = {
-            "vault_id": vault_id, "source_id": sig.get("source_id", ""),
-            "observation_id": sig.get("observation_id", ""), "signal_id": sid,
-            "scan_id": scan_id, "committed_at": timestamp, "signal": sig,
-            "origin": origin, "canonized": False,
-        }
-        vault.append(entry)
-        new_entries.append(entry)
-    save_vault(vault)
-    return VaultReport(str(uuid.uuid4()), scan_id, timestamp, len(new_entries), len(vault), new_entries)
-
 def run_veil(deferred_signals: list, scan_id: str) -> VeilReport:
     hold = load_veil_hold()
     timestamp = datetime.datetime.utcnow().isoformat()
@@ -113,13 +92,3 @@ def run_veil(deferred_signals: list, scan_id: str) -> VeilReport:
     return VeilReport(str(uuid.uuid4()), scan_id, timestamp, len(deferred_signals),
                       len(promoted), held_over, expired, promoted,
                       [v for v in hold.values() if isinstance(v, dict) and v.get("status") == "HELD"])
-
-def route_signals(passed_signals: list, deferred_signals: list, scan_id: str) -> tuple:
-    vault_report = commit_to_vault(passed_signals, scan_id, origin="passed")
-    veil_report = run_veil(deferred_signals, scan_id)
-    if veil_report.promoted_signals:
-        promo = commit_to_vault(veil_report.promoted_signals, scan_id, origin="veil_promoted")
-        vault_report.committed += promo.committed
-        vault_report.total_vault_size = promo.total_vault_size
-        vault_report.new_entries.extend(promo.new_entries)
-    return vault_report, veil_report

@@ -24,6 +24,35 @@ TOOLS = [
                 "enable_multi_timescale": {"type": "boolean", "default": True},
                 "use_firecrawl": {"type": "boolean", "default": False},
                 "generate_fir": {"type": "boolean", "default": False},
+                "identity": {
+                    "type": "object",
+                    "description": "Optional canonical Vara operator identity used to derive supervisor lineage when lineage is not supplied.",
+                    "properties": {
+                        "operator_id": {"type": "string"},
+                        "role": {"type": "string"},
+                    },
+                },
+                "runtime_state": {
+                    "type": "object",
+                    "description": "Optional canonical Vara runtime state used with identity to construct an epistemic supervisor context.",
+                    "properties": {
+                        "altitude": {"type": "string"},
+                    },
+                },
+                "lineage": {
+                    "type": "array",
+                    "description": "Canonical Vara lineage entries. Required for canonical promotion; omitted lineage produces a non-canonical scan.",
+                    "items": {
+                        "type": "object",
+                        "required": ["seq", "operator_id", "role", "altitude"],
+                        "properties": {
+                            "seq": {},
+                            "operator_id": {"type": "string"},
+                            "role": {"type": "string"},
+                            "altitude": {"type": "string"}
+                        }
+                    }
+                },
             },
             "required": [],
         },

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import config
+from .canonical_vara import govern_operational_report
 
 # Make the operational Vara package importable
 if str(config.VARA_PACKAGE_PATH) not in sys.path:
@@ -49,6 +50,15 @@ def vara_run_scan(arguments: dict) -> dict:
     keywords = arguments.get("keywords") or ["AI", "agentic", "compute"]
     planes = arguments.get("active_planes") or list(config.DEFAULT_PLANES)
     sweep = int(arguments.get("sweep_depth_hours") or config.DEFAULT_SWEEP_HOURS)
+    lineage = arguments.get("lineage")
+    supervisor_identity = arguments.get("identity")
+    supervisor_runtime = arguments.get("runtime_state")
+    if lineage is None and supervisor_identity and supervisor_runtime:
+        from .canonical_vara import CanonicalVaraSupervisorAdapter
+        context = CanonicalVaraSupervisorAdapter().build_context(
+            supervisor_identity, supervisor_runtime
+        )
+        lineage = context["lineage"]
     label = arguments.get("scan_label") or f"mcp_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M')}"
 
     cfg_kwargs = {
@@ -109,6 +119,14 @@ def vara_run_scan(arguments: dict) -> dict:
         result = report
     else:
         result = {"raw": str(report)}
+
+    result = govern_operational_report(result, lineage)
+    if supervisor_identity and supervisor_runtime:
+        from .canonical_vara import CanonicalVaraSupervisorAdapter
+        supervisor = CanonicalVaraSupervisorAdapter()
+        result["canonical_conformance"]["epistemic_state"] = supervisor.emit(
+            supervisor.build_context(supervisor_identity, supervisor_runtime)
+        )
 
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
