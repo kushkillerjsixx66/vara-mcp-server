@@ -8,17 +8,33 @@ from typing import Any, Literal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from . import config
 from .tools import call_tool
 
 
+# DNS-rebinding protection is kept enabled. The public Vercel hostname must be
+# explicitly allowed; an empty allowed_hosts list rejects every external Host.
+_TRANSPORT_SECURITY = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=[
+        "localhost",
+        "localhost:*",
+        "127.0.0.1",
+        "127.0.0.1:*",
+        "vara-mcp-server.vercel.app",
+        "vara-mcp-server.vercel.app:*",
+    ],
+)
+
 mcp = FastMCP(
     "vara-mcp",
     stateless_http=True,
     json_response=True,
     streamable_http_path="/",
+    transport_security=_TRANSPORT_SECURITY,
 )
 
 
@@ -237,6 +253,7 @@ app = FastAPI(
     description="Machine-callable Real Vara sensory architecture",
     version="1.1.0",
     lifespan=lifespan,
+    redirect_slashes=False,  # POST /api/mcp must be answered directly (no 307)
 )
 
 app.add_middleware(
