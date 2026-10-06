@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import config
 from .tools import call_tool
@@ -248,12 +249,30 @@ async def lifespan(app: FastAPI):
         yield
 
 
+class _NormalizeMcpPath:
+    """Rewrite /api/mcp → /api/mcp/ internally so the mounted app matches.
+
+    No client-visible redirect; the original POST body is preserved.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("path") == "/api/mcp":
+            scope = dict(scope)
+            scope["path"] = "/api/mcp/"
+            if "raw_path" in scope:
+                scope["raw_path"] = b"/api/mcp/"
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(
     title="Vara MCP Server",
     description="Machine-callable Real Vara sensory architecture",
     version="1.1.0",
     lifespan=lifespan,
-    redirect_slashes=False,  # POST /api/mcp must be answered directly (no 307)
+    redirect_slashes=False,
 )
 
 app.add_middleware(
@@ -264,12 +283,11 @@ app.add_middleware(
     expose_headers=["Mcp-Session-Id"],
 )
 
-# Native Streamable HTTP endpoint.
-# Dual-mount so both /api/mcp and /api/mcp/ answer POSTs with no redirect.
-# (Starlette path matching treats the two prefixes differently relative to
-# streamable_http_path="/".)
+# Mount at the slash form that the Streamable HTTP app matches as path "/".
 app.mount("/api/mcp/", mcp_http_app)
-app.mount("/api/mcp", mcp_http_app)
+
+# Outermost ASGI wrapper: present exact /api/mcp as /api/mcp/ to the router.
+app = _NormalizeMcpPath(app)  # type: ignore[assignment]
 
 
 if __name__ == "__main__":
