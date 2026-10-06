@@ -86,6 +86,10 @@ def vara_run_scan(arguments: dict) -> dict:
     import vara_veil_vault as vvv
     import entity_watchlist as ew
 
+    # Ensure writable state root exists and is seeded from the package tree.
+    # On Vercel /var/task is read-only; Veil/Vault/output must live under /tmp.
+    config.ensure_writable_data_root()
+
     # Keep every stateful Vara component on the MCP-configured data root.
     # Without this, relative paths in the vendored modules can diverge from
     # the paths used by the MCP query tools in Vercel/serverless deployments.
@@ -99,8 +103,6 @@ def vara_run_scan(arguments: dict) -> dict:
     vvv.VAULT_PATH = str(config.VAULT_SIGNALS_PATH)
     vvv.VEIL_HOLD_PATH = str(config.VEIL_HOLD_PATH)
     ew.WATCHLIST_PATH = str(config.VARA_DATA_ROOT / "entity_watchlist_state.json")
-    config.VARA_DATA_ROOT.mkdir(parents=True, exist_ok=True)
-    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
         report = run_vara_scan(cfg)
@@ -157,6 +159,7 @@ def vara_run_scan(arguments: dict) -> dict:
 # ─── TOOL: vara_list_scans ───────────────────────────────────────────────────
 
 def vara_list_scans(arguments: dict) -> dict:
+    config.ensure_writable_data_root()
     limit = int(arguments.get("limit") or 20)
     since = arguments.get("since")
     label_contains = (arguments.get("label_contains") or "").lower()
@@ -196,6 +199,7 @@ def vara_list_scans(arguments: dict) -> dict:
 # ─── TOOL: vara_get_scan ─────────────────────────────────────────────────────
 
 def vara_get_scan(arguments: dict) -> dict:
+    config.ensure_writable_data_root()
     scan_id = (arguments.get("scan_id") or "").strip()
     if not scan_id:
         return {"error": "scan_id is required"}
@@ -231,6 +235,7 @@ def vara_get_scan(arguments: dict) -> dict:
 # ─── TOOL: vara_query_signals ────────────────────────────────────────────────
 
 def vara_query_signals(arguments: dict) -> dict:
+    config.ensure_writable_data_root()
     vault = _load_json(config.VAULT_SIGNALS_PATH, [])
     results = []
 
@@ -279,6 +284,7 @@ def vara_query_signals(arguments: dict) -> dict:
 # ─── TOOL: vara_get_veil_state ───────────────────────────────────────────────
 
 def vara_get_veil_state(arguments: dict) -> dict:
+    config.ensure_writable_data_root()
     hold = _load_json(config.VEIL_HOLD_PATH, {})
     trajectories = _load_json(config.VEIL_TRAJECTORIES_PATH, {})
 
