@@ -264,7 +264,11 @@ app.add_middleware(
     expose_headers=["Mcp-Session-Id"],
 )
 
-# Native Streamable HTTP endpoint: https://.../api/mcp
+# Native Streamable HTTP endpoint.
+# Dual-mount so both /api/mcp and /api/mcp/ answer POSTs with no redirect.
+# (Starlette path matching treats the two prefixes differently relative to
+# streamable_http_path="/".)
+app.mount("/api/mcp/", mcp_http_app)
 app.mount("/api/mcp", mcp_http_app)
 
 
