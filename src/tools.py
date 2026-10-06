@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import config
+from . import durable
 from .canonical_vara import govern_operational_report
 from .canonical_veil import CanonicalVeilBoundaryAdapter
 
@@ -89,6 +90,8 @@ def vara_run_scan(arguments: dict) -> dict:
     # Ensure writable state root exists and is seeded from the package tree.
     # On Vercel /var/task is read-only; Veil/Vault/output must live under /tmp.
     config.ensure_writable_data_root()
+    # Pull any prior durable archive into /tmp before the scan runs.
+    durable.hydrate_from_durable()
 
     # Keep every stateful Vara component on the MCP-configured data root.
     # Without this, relative paths in the vendored modules can diverge from
@@ -153,6 +156,19 @@ def vara_run_scan(arguments: dict) -> dict:
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
 
+    # Dual-write: local /tmp is hot cache; GitHub archive is durable.
+    try:
+        scan_id = str(result.get("scan_id") or "")
+        short = scan_id.replace("-", "")[:8]
+        local_path = config.OUTPUT_DIR / f"scan_{short}.json"
+        # Ensure the full report is on disk even if the vendor writer used a different name.
+        if not local_path.exists() and scan_id:
+            _save_json(local_path, result)
+        result["durable_archive"] = durable.persist_scan_report(result, local_path if local_path.exists() else None)
+        result["durable_state"] = durable.persist_state_files()
+    except Exception as e:
+        result["durable_archive"] = {"persisted": False, "error": str(e)}
+
     return result
 
 
@@ -160,46 +176,66 @@ def vara_run_scan(arguments: dict) -> dict:
 
 def vara_list_scans(arguments: dict) -> dict:
     config.ensure_writable_data_root()
+    hydrate = durable.hydrate_from_durable()
     limit = int(arguments.get("limit") or 20)
     since = arguments.get("since")
     label_contains = (arguments.get("label_contains") or "").lower()
 
-    scans = []
-    if not config.OUTPUT_DIR.exists():
-        return {"scans": [], "count": 0, "note": f"No output dir at {config.OUTPUT_DIR}"}
+    by_id: dict[str, dict] = {}
 
-    for path in sorted(config.OUTPUT_DIR.glob("scan_*.json"), reverse=True):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            continue
+    # Local files
+    if config.OUTPUT_DIR.exists():
+        for path in sorted(config.OUTPUT_DIR.glob("scan_*.json"), reverse=True):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+            sid = data.get("scan_id") or path.name
+            by_id[str(sid)] = {
+                "scan_id": data.get("scan_id"),
+                "scan_label": data.get("scan_label"),
+                "timestamp": data.get("timestamp"),
+                "config_hash": data.get("config_hash"),
+                "active_planes": data.get("active_planes"),
+                "signal_count": len(data.get("signals") or []),
+                "null_result": data.get("null_result"),
+                "file": path.name,
+                "source": "local",
+            }
 
-        meta = {
-            "scan_id": data.get("scan_id"),
-            "scan_label": data.get("scan_label"),
-            "timestamp": data.get("timestamp"),
-            "config_hash": data.get("config_hash"),
-            "active_planes": data.get("active_planes"),
-            "signal_count": len(data.get("signals") or []),
-            "null_result": data.get("null_result"),
-            "file": path.name,
-        }
-        if since and (meta["timestamp"] or "") < since:
+    # Durable index fills gaps (and survives /tmp loss)
+    for entry in durable.list_durable_scans(limit=200):
+        sid = str(entry.get("scan_id") or entry.get("file") or "")
+        if not sid or sid in by_id:
             continue
-        if label_contains and label_contains not in (meta["scan_label"] or "").lower():
+        by_id[sid] = {**entry, "source": "durable"}
+
+    scans = list(by_id.values())
+    scans.sort(key=lambda m: m.get("timestamp") or "", reverse=True)
+
+    filtered = []
+    for meta in scans:
+        if since and (meta.get("timestamp") or "") < since:
             continue
-        scans.append(meta)
-        if len(scans) >= limit:
+        if label_contains and label_contains not in (meta.get("scan_label") or "").lower():
+            continue
+        filtered.append(meta)
+        if len(filtered) >= limit:
             break
 
-    return {"scans": scans, "count": len(scans)}
+    return {
+        "scans": filtered,
+        "count": len(filtered),
+        "durable": {"enabled": durable.enabled(), **hydrate},
+    }
 
 
 # ─── TOOL: vara_get_scan ─────────────────────────────────────────────────────
 
 def vara_get_scan(arguments: dict) -> dict:
     config.ensure_writable_data_root()
+    durable.hydrate_from_durable()
     scan_id = (arguments.get("scan_id") or "").strip()
     if not scan_id:
         return {"error": "scan_id is required"}
@@ -219,11 +255,26 @@ def vara_get_scan(arguments: dict) -> dict:
             except Exception:
                 continue
 
-    if not candidates:
-        return {"error": f"No scan found matching '{scan_id}'", "searched": str(config.OUTPUT_DIR)}
+    data = None
+    if candidates:
+        with open(candidates[0], "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        data = durable.fetch_durable_scan(scan_id)
+        if data and data.get("scan_id"):
+            # Cache into /tmp for subsequent local reads
+            try:
+                short = str(data["scan_id"]).replace("-", "")[:8]
+                _save_json(config.OUTPUT_DIR / f"scan_{short}.json", data)
+            except OSError:
+                pass
 
-    with open(candidates[0], "r", encoding="utf-8") as f:
-        data = json.load(f)
+    if not data:
+        return {
+            "error": f"No scan found matching '{scan_id}'",
+            "searched": str(config.OUTPUT_DIR),
+            "durable_enabled": durable.enabled(),
+        }
 
     if not include_signals:
         data = {k: v for k, v in data.items() if k != "signals"}
@@ -236,6 +287,7 @@ def vara_get_scan(arguments: dict) -> dict:
 
 def vara_query_signals(arguments: dict) -> dict:
     config.ensure_writable_data_root()
+    durable.hydrate_from_durable()
     vault = _load_json(config.VAULT_SIGNALS_PATH, [])
     results = []
 
@@ -285,6 +337,7 @@ def vara_query_signals(arguments: dict) -> dict:
 
 def vara_get_veil_state(arguments: dict) -> dict:
     config.ensure_writable_data_root()
+    durable.hydrate_from_durable()
     hold = _load_json(config.VEIL_HOLD_PATH, {})
     trajectories = _load_json(config.VEIL_TRAJECTORIES_PATH, {})
 
