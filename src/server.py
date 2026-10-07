@@ -13,6 +13,7 @@ from mcp.types import ToolAnnotations
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import config
+from . import tools as _tools_data
 from .tools import call_tool
 
 
@@ -220,6 +221,160 @@ def vara_generate_fir(
     return _call("vara_generate_fir", {k: v for k, v in arguments.items() if v is not None})
 
 
+# ─── Resources (MCP upgrade Phase 1, 2026-10-07) ─────────────────────────────
+# Until now this server advertised `resources` capability but exposed zero
+# resources: every read was a tool call returning an unbounded blob (a full
+# scan report = manifest + every signal body in one response). Resources make
+# scans addressable at signal granularity — the URI is the provenance:
+#
+#   vara://scans                            index of archived scans (manifests)
+#   vara://scan/{scan_id}                   one scan: metadata + signal INDEX
+#                                           (bodies are NOT inlined)
+#   vara://scan/{scan_id}/signal/{signal_id}  one signal, full body
+#   vara://scan/{scan_id}/lineage           provenance view of a scan, with
+#                                           lineage gaps stated as nulls
+#   vara://veil/state                       current Veil hold
+#
+# All handlers reuse the same data functions as the tools (src/tools.py), so
+# resource reads and tool reads cannot diverge.
+
+import json as _json
+
+
+def _signal_index_entry(scan_id: str, sig: dict) -> dict:
+    sid = sig.get("signal_id") or sig.get("source_id")
+    return {
+        "signal_id": sid,
+        "source_id": sig.get("source_id"),
+        "plane": sig.get("plane"),
+        "title": sig.get("title"),
+        "url": sig.get("url"),
+        "novelty_score": sig.get("novelty_score"),
+        "track": sig.get("track"),
+        "uri": f"vara://scan/{scan_id}/signal/{sid}" if sid else None,
+    }
+
+
+@mcp.resource(
+    "vara://scans",
+    name="vara-scans",
+    description="Index of archived Vara scans (metadata only, newest first).",
+    mime_type="application/json",
+)
+def scans_resource() -> str:
+    return _json.dumps(_tools_data.vara_list_scans({"limit": 50}), default=str)
+
+
+@mcp.resource(
+    "vara://scan/{scan_id}",
+    name="vara-scan",
+    description=(
+        "One Vara scan report with its signals replaced by an index of "
+        "per-signal resource URIs. Read vara://scan/{id}/signal/{signal_id} "
+        "for a signal body."
+    ),
+    mime_type="application/json",
+)
+def scan_resource(scan_id: str) -> str:
+    # NOTE: scan reports carry a top-level "error" field that is null on
+    # success — failure is a non-empty error string, never key presence.
+    data = _tools_data.vara_get_scan({"scan_id": scan_id, "include_signals": True})
+    if data.get("error"):
+        return _json.dumps({"error": data["error"]}, default=str)
+    signals = data.get("signals") or []
+    out = {k: v for k, v in data.items() if k != "signals"}
+    out["signal_count"] = len(signals)
+    out["signals_index"] = [_signal_index_entry(str(data.get("scan_id") or scan_id), s) for s in signals]
+    out["lineage_uri"] = f"vara://scan/{data.get('scan_id') or scan_id}/lineage"
+    return _json.dumps(out, default=str)
+
+
+@mcp.resource(
+    "vara://scan/{scan_id}/signal/{signal_id}",
+    name="vara-scan-signal",
+    description="One signal from a Vara scan, full body, with its scan provenance.",
+    mime_type="application/json",
+)
+def scan_signal_resource(scan_id: str, signal_id: str) -> str:
+    data = _tools_data.vara_get_scan({"scan_id": scan_id, "include_signals": True})
+    if data.get("error"):
+        return _json.dumps({"error": data["error"]}, default=str)
+    for sig in data.get("signals") or []:
+        if signal_id in (sig.get("signal_id"), sig.get("source_id")):
+            return _json.dumps(
+                {
+                    "scan_id": data.get("scan_id"),
+                    "scan_timestamp": data.get("timestamp"),
+                    "config_hash": data.get("config_hash"),
+                    "signal": sig,
+                },
+                default=str,
+            )
+    return _json.dumps(
+        {"error": f"No signal '{signal_id}' in scan '{data.get('scan_id') or scan_id}'"},
+        default=str,
+    )
+
+
+@mcp.resource(
+    "vara://scan/{scan_id}/lineage",
+    name="vara-scan-lineage",
+    description=(
+        "Provenance view of a scan: scan-level provenance plus per-signal "
+        "source fields. Fields the scan pipeline does not record are "
+        "returned as explicit nulls and named in lineage_gaps — never filled."
+    ),
+    mime_type="application/json",
+)
+def scan_lineage_resource(scan_id: str) -> str:
+    data = _tools_data.vara_get_scan({"scan_id": scan_id, "include_signals": True})
+    if data.get("error"):
+        return _json.dumps({"error": data["error"]}, default=str)
+    signals = data.get("signals") or []
+    gaps = []
+    if signals and all("retrieved_at" not in s for s in signals):
+        gaps.append("per-signal retrieved_at is not recorded by the scan pipeline")
+    if signals and all("disposition" not in s for s in signals):
+        gaps.append("per-signal disposition is not recorded in scan reports")
+    return _json.dumps(
+        {
+            "scan_id": data.get("scan_id"),
+            "scan_label": data.get("scan_label"),
+            "retrieved_at": data.get("timestamp"),
+            "config_hash": data.get("config_hash"),
+            "keywords": data.get("keywords"),
+            "active_planes": data.get("active_planes"),
+            "canonical_conformance": data.get("canonical_conformance"),
+            "signals": [
+                {
+                    "signal_id": s.get("signal_id") or s.get("source_id"),
+                    "source_id": s.get("source_id"),
+                    "url": s.get("url"),
+                    "feed_tier": s.get("feed_tier"),
+                    "entity_first_seen": s.get("entity_first_seen"),
+                    "track": s.get("track"),
+                    "retrieved_at": s.get("retrieved_at"),
+                    "disposition": s.get("disposition"),
+                    "uri": f"vara://scan/{data.get('scan_id')}/signal/{s.get('signal_id') or s.get('source_id')}",
+                }
+                for s in signals
+            ],
+            "lineage_gaps": gaps,
+        },
+        default=str,
+    )
+
+
+@mcp.resource(
+    "vara://veil/state",
+    name="vara-veil-state",
+    description="Current Veil hold: held entries and trajectories.",
+    mime_type="application/json",
+)
+def veil_state_resource() -> str:
+    return _json.dumps(_tools_data.vara_get_veil_state({}), default=str)
+
+
 @mcp.custom_route("/health", methods=["GET"])
 async def health(request):
     return {
@@ -235,6 +390,13 @@ async def health(request):
             "vara_query_signals",
             "vara_get_veil_state",
             "vara_generate_fir",
+        ],
+        "resources": [
+            "vara://scans",
+            "vara://scan/{scan_id}",
+            "vara://scan/{scan_id}/signal/{signal_id}",
+            "vara://scan/{scan_id}/lineage",
+            "vara://veil/state",
         ],
     }
 
