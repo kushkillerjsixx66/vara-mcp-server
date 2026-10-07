@@ -241,7 +241,17 @@ def vara_generate_fir(
 import json as _json
 
 
-def _signal_index_entry(scan_id: str, sig: dict) -> dict:
+def _signal_address(sig: dict, position: int) -> str:
+    """Addressable identity for a signal within its scan.
+
+    Modern signals carry signal_id/source_id. Legacy scans (e.g. the Sep 2
+    seed) carry neither — those signals are addressed positionally as
+    "idx:{n}" so every signal in every scan stays reachable as a resource.
+    """
+    return sig.get("signal_id") or sig.get("source_id") or f"idx:{position}"
+
+
+def _signal_index_entry(scan_id: str, sig: dict, position: int = 0) -> dict:
     sid = sig.get("signal_id") or sig.get("source_id")
     return {
         "signal_id": sid,
@@ -251,7 +261,7 @@ def _signal_index_entry(scan_id: str, sig: dict) -> dict:
         "url": sig.get("url"),
         "novelty_score": sig.get("novelty_score"),
         "track": sig.get("track"),
-        "uri": f"vara://scan/{scan_id}/signal/{sid}" if sid else None,
+        "uri": f"vara://scan/{scan_id}/signal/{_signal_address(sig, position)}",
     }
 
 
@@ -284,7 +294,10 @@ def scan_resource(scan_id: str) -> str:
     signals = data.get("signals") or []
     out = {k: v for k, v in data.items() if k != "signals"}
     out["signal_count"] = len(signals)
-    out["signals_index"] = [_signal_index_entry(str(data.get("scan_id") or scan_id), s) for s in signals]
+    out["signals_index"] = [
+        _signal_index_entry(str(data.get("scan_id") or scan_id), s, i)
+        for i, s in enumerate(signals)
+    ]
     out["lineage_uri"] = f"vara://scan/{data.get('scan_id') or scan_id}/lineage"
     return _json.dumps(out, default=str)
 
@@ -299,7 +312,28 @@ def scan_signal_resource(scan_id: str, signal_id: str) -> str:
     data = _tools_data.vara_get_scan({"scan_id": scan_id, "include_signals": True})
     if data.get("error"):
         return _json.dumps({"error": data["error"]}, default=str)
-    for sig in data.get("signals") or []:
+    signals = data.get("signals") or []
+    if signal_id.startswith("idx:"):
+        try:
+            pos = int(signal_id[4:])
+        except ValueError:
+            pos = -1
+        if 0 <= pos < len(signals):
+            return _json.dumps(
+                {
+                    "scan_id": data.get("scan_id"),
+                    "scan_timestamp": data.get("timestamp"),
+                    "config_hash": data.get("config_hash"),
+                    "identity": "positional — this signal carries no signal_id/source_id (legacy scan)",
+                    "signal": signals[pos],
+                },
+                default=str,
+            )
+        return _json.dumps(
+            {"error": f"No signal at position {signal_id} in scan '{data.get('scan_id') or scan_id}'"},
+            default=str,
+        )
+    for sig in signals:
         if signal_id in (sig.get("signal_id"), sig.get("source_id")):
             return _json.dumps(
                 {
@@ -355,9 +389,9 @@ def scan_lineage_resource(scan_id: str) -> str:
                     "track": s.get("track"),
                     "retrieved_at": s.get("retrieved_at"),
                     "disposition": s.get("disposition"),
-                    "uri": f"vara://scan/{data.get('scan_id')}/signal/{s.get('signal_id') or s.get('source_id')}",
+                    "uri": f"vara://scan/{data.get('scan_id')}/signal/{_signal_address(s, i)}",
                 }
-                for s in signals
+                for i, s in enumerate(signals)
             ],
             "lineage_gaps": gaps,
         },
