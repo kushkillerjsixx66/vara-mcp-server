@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import os
 from typing import Any, Literal
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -478,6 +480,45 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Mcp-Session-Id"],
 )
+
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+async def privacy_policy():
+    """Public privacy disclosure for hosted MCP directory submission."""
+    return HTMLResponse(
+        """<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Vara MCP Server</title></head>
+<body><main>
+<h1>Privacy Policy — Vara MCP Server</h1>
+<p><strong>Last updated:</strong> October 12, 2026</p>
+<h2>Scope</h2>
+<p>This policy describes data handled by the Vara MCP Server at <code>https://vara-mcp-server.vercel.app/api/mcp</code>. The service is operated through the public source repository at <a href="https://github.com/kushkillerjsixx66/vara-mcp-server">kushkillerjsixx66/vara-mcp-server</a>.</p>
+<h2>Information processed</h2>
+<p>Tool requests may include search keywords, scan configuration, labels, scan identifiers, and filters. Scans can retrieve information from external feeds and websites configured by the Vara pipeline. If the caller enables Firecrawl and it is configured, scan activity may also involve that external service.</p>
+<p>Scan results can contain retrieved source URLs, titles, signal content, timestamps, configuration metadata, and derived Vara/Veil/Vault state. Do not submit passwords, access tokens, confidential material, or personal information you do not have permission to process.</p>
+<h2>Storage and retention</h2>
+<p>The service uses a writable runtime directory (typically <code>/tmp</code> on Vercel) for scan files and state. This storage is temporary and may disappear when a serverless instance is recycled.</p>
+<p>If <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code> is configured and the durable backend is enabled, the service also writes scan reports, an index, and selected state files to a GitHub repository and archive branch. Defaults are <code>kushkillerjsixx66/vara-mcp-server</code> and <code>vara-archive</code>. Archived records remain until removed from the repository; the service does not currently implement an automatic retention period. Repository visibility and GitHub retention and backup behavior affect access and persistence. If the repository is public, archived records may be publicly accessible.</p>
+<h2>Service providers and logs</h2>
+<p>The service runs on Vercel, which may process connection metadata and platform logs under its own policies. When durable archiving is enabled, the service communicates with the GitHub API. Scan execution can contact external source providers configured by the pipeline. Those providers process requests under their own terms and privacy policies.</p>
+<h2>Use and sharing</h2>
+<p>The service does not provide user accounts or payment processing. It does not intentionally sell submitted tool arguments or scan results. Information may be processed by the infrastructure and external providers described above, and archived results may be visible according to repository access settings. This service cannot promise immediate deletion of third-party infrastructure logs.</p>
+<h2>Security and user responsibility</h2>
+<p>The MCP endpoint is currently anonymous unless deployment configuration changes. Treat tool arguments and results accordingly. Do not use this service to store secrets or sensitive personal data. The operator cannot guarantee uninterrupted availability or prevent access to data deliberately written to a publicly accessible repository.</p>
+<h2>Changes and contact</h2>
+<p>This policy may be updated when data handling changes. For questions or privacy-related requests, contact the maintainer through the <a href="https://github.com/kushkillerjsixx66/vara-mcp-server/issues">repository issue tracker</a>. Do not post sensitive personal information in a public issue.</p>
+</main></body></html>"""
+    )
+
+
+@app.get("/.well-known/openai-apps-challenge", include_in_schema=False)
+async def openai_apps_challenge():
+    """Serve the exact verification token supplied by the OpenAI submission portal."""
+    token = os.environ.get("OPENAI_APPS_CHALLENGE", "")
+    if not token:
+        return Response(status_code=404)
+    return PlainTextResponse(token)
 
 # Mount at the slash form that the Streamable HTTP app matches as path "/".
 app.mount("/api/mcp/", mcp_http_app)
