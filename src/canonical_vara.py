@@ -105,6 +105,13 @@ class CanonicalVaraIntegrity:
             missing = [key for key in REQUIRED_LINEAGE if key not in entry]
             if missing:
                 errors.append(f"lineage[{index}] missing: {','.join(missing)}")
+                continue
+            empty = [
+                key for key in REQUIRED_LINEAGE
+                if entry.get(key) is None or (isinstance(entry.get(key), str) and not entry[key].strip())
+            ]
+            if empty:
+                errors.append(f"lineage[{index}] empty: {','.join(empty)}")
 
         for index, signal in enumerate(scan.weak_signals):
             if not signal.get("key") or not signal.get("description"):
