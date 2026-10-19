@@ -90,6 +90,9 @@ class CanonicalVaraScanResult:
     anomalies: list[dict[str, Any]]
     unspecified: list[str]
     lineage: list[dict[str, Any]]
+    # Structural fields supplied by a caller are not proof of trusted authority.
+    # A verified value may only be set by a future trusted verifier integration.
+    lineage_verified: bool = False
 
 
 class CanonicalVaraIntegrity:
@@ -130,7 +133,7 @@ class CanonicalVaraPromoter:
     """Mirror the canonical VaultScanPromoter contract."""
 
     def should_promote(self, scan: CanonicalVaraScanResult) -> bool:
-        if not scan.lineage:
+        if not scan.lineage or not scan.lineage_verified:
             return False
         if scan.weak_signals or scan.anomalies:
             return True
@@ -181,6 +184,9 @@ def project_operational_report(
             "operational scan returned null result"
         ] if report.get("null_result") else [],
         lineage=list(lineage or []),
+        # No trusted canonical lineage verifier is currently connected here.
+        # Never promote based only on caller-asserted identity/lineage fields.
+        lineage_verified=False,
     )
     return canonical, []
 
@@ -201,6 +207,13 @@ def govern_operational_report(
     canonical, _ = project_operational_report(report, lineage)
     valid, errors = CanonicalVaraIntegrity().validate(canonical)
     promotion_allowed = valid and CanonicalVaraPromoter().should_promote(canonical)
+    promotion_blockers: list[str] = []
+    if not canonical.lineage:
+        promotion_blockers.append("caller-supplied lineage is missing")
+    if canonical.lineage and not canonical.lineage_verified:
+        promotion_blockers.append(
+            "trusted canonical lineage verifier is unavailable; caller-supplied fields do not prove authority"
+        )
 
     result = dict(report)
     result["canonical"] = {
@@ -212,9 +225,11 @@ def govern_operational_report(
     }
     result["canonical_conformance"] = {
         "lineage_present": bool(canonical.lineage),
+        "lineage_verified": canonical.lineage_verified,
         "integrity_valid": valid,
         "promotion_allowed": promotion_allowed,
         "errors": errors,
+        "promotion_blockers": promotion_blockers,
     }
 
     if promotion_allowed:
