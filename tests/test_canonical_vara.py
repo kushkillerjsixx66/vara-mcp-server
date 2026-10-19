@@ -246,3 +246,48 @@ def test_public_mcp_never_claims_vault_promotion_execution():
     assert handoff["execution"]["executed"] is False
     assert handoff["execution"]["committed"] is False
     assert "promoted" not in handoff["status"]
+
+
+
+def test_lineage_with_empty_required_values_fails_integrity():
+    from src.canonical_vara import CanonicalVaraScanResult
+
+    scan = CanonicalVaraScanResult(
+        weak_signals=[],
+        trends=[],
+        anomalies=[],
+        unspecified=[],
+        lineage=[{"seq": 1, "operator_id": "", "role": "operator", "altitude": "A2"}],
+    )
+
+    valid, errors = CanonicalVaraIntegrity().validate(scan)
+    assert valid is False
+    assert any("lineage[0] empty: operator_id" in error for error in errors)
+    assert CanonicalVaraPromoter().should_promote(scan) is False
+
+
+def test_preliminary_fir_never_claims_canonical_promotion_without_lineage():
+    from src.tools import _render_fir_from_report
+
+    report = {
+        "scan_id": "12345678-1234-5678-1234-567812345678",
+        "timestamp": "2026-10-19T00:00:00Z",
+        "scan_label": "test-lineage",
+        "active_planes": ["tech"],
+        "signals": [{"title": "test signal", "plane": "tech", "novelty_score": 0.2}],
+        "canonical_conformance": {
+            "lineage_present": False,
+            "integrity_valid": False,
+            "promotion_allowed": False,
+            "errors": ["lineage is required for canonical Vara status"],
+        },
+    }
+
+    fir = _render_fir_from_report(report, {})
+    assert "FIR-PRELIM-12345678" in fir
+    assert "FIR-XXX" not in fir
+    assert "Caller-supplied lineage: MISSING" in fir
+    assert "Integrity validation: INVALID" in fir
+    assert "Promotion eligibility: BLOCKED" in fir
+    assert "BLOCKER: lineage is required for canonical Vara status" in fir
+    assert "NOT COMPUTED" in fir
