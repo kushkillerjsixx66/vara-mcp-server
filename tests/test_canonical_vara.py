@@ -17,7 +17,7 @@ def test_missing_lineage_is_not_canonical():
     assert CanonicalVaraPromoter().should_promote(result) is False
 
 
-def test_valid_lineage_allows_deterministic_promotion():
+def test_structurally_valid_lineage_does_not_prove_authority_or_allow_promotion():
     result, _ = project_operational_report(
         {"signals": [{"signal_id": "s1", "content": "x"}]},
         [{"seq": "001", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
@@ -26,7 +26,8 @@ def test_valid_lineage_allows_deterministic_promotion():
 
     assert valid is True
     assert errors == []
-    assert CanonicalVaraPromoter().should_promote(result) is True
+    assert result.lineage_verified is False
+    assert CanonicalVaraPromoter().should_promote(result) is False
 
 
 def test_lineage_is_preserved_exactly():
@@ -45,22 +46,12 @@ def test_governance_emits_canonical_pipeline_event_without_local_persistence():
     )
 
     conformance = result["canonical_conformance"]
-    assert conformance["promotion_allowed"] is True
-    handoff = conformance["promotion_handoff"]
-    assert handoff["type"] == "vault_promotion_request"
-    assert handoff["source"] == "vara_scan_pipeline"
-    assert handoff["target"] == "canonical_vault_pipeline"
-    assert handoff["status"] == "eligible_not_executed"
-    assert handoff["authority"] == "canonical_vault"
-    assert handoff["execution"] == {
-        "requested": False,
-        "executed": False,
-        "committed": False,
-    }
-    assert handoff["dispatch"] == "canonical_vault_pipeline_required"
-    assert handoff["payload"]["lineage"] == [
-        {"seq": "002", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}
-    ]
+    assert conformance["integrity_valid"] is True
+    assert conformance["lineage_present"] is True
+    assert conformance["lineage_verified"] is False
+    assert conformance["promotion_allowed"] is False
+    assert "promotion_handoff" not in conformance
+    assert any("trusted canonical lineage verifier is unavailable" in item for item in conformance["promotion_blockers"])
     assert "promotion_path" not in conformance
 
 
@@ -241,11 +232,10 @@ def test_public_mcp_never_claims_vault_promotion_execution():
         [{"seq": "005", "operator_id": "JRM-01", "role": "operator", "altitude": "A2"}],
     )
 
-    handoff = result["canonical_conformance"]["promotion_handoff"]
-    assert handoff["status"] == "eligible_not_executed"
-    assert handoff["execution"]["executed"] is False
-    assert handoff["execution"]["committed"] is False
-    assert "promoted" not in handoff["status"]
+    conformance = result["canonical_conformance"]
+    assert conformance["promotion_allowed"] is False
+    assert "promotion_handoff" not in conformance
+    assert any("trusted canonical lineage verifier is unavailable" in item for item in conformance["promotion_blockers"])
 
 
 
@@ -291,3 +281,25 @@ def test_preliminary_fir_never_claims_canonical_promotion_without_lineage():
     assert "Promotion eligibility: BLOCKED" in fir
     assert "BLOCKER: lineage is required for canonical Vara status" in fir
     assert "NOT COMPUTED" in fir
+
+
+
+def test_fir_marks_present_but_unverified_lineage_as_blocked():
+    from src.tools import _render_fir_from_report
+
+    fir = _render_fir_from_report({
+        "scan_id": "87654321-0000-0000-0000-000000000000",
+        "signals": [{"title": "signal", "plane": "tech", "novelty_score": 0.2}],
+        "canonical_conformance": {
+            "lineage_present": True,
+            "lineage_verified": False,
+            "integrity_valid": True,
+            "promotion_allowed": False,
+            "errors": [],
+            "promotion_blockers": ["trusted canonical lineage verifier is unavailable; caller-supplied fields do not prove authority"],
+        },
+    }, {})
+    assert "Caller-supplied lineage: PRESENT / UNVERIFIED" in fir
+    assert "Integrity validation: VALID" in fir
+    assert "Promotion eligibility: BLOCKED" in fir
+    assert "PROMOTION BLOCKER: trusted canonical lineage verifier is unavailable" in fir
