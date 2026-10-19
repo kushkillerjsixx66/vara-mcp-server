@@ -303,3 +303,16 @@ def test_fir_marks_present_but_unverified_lineage_as_blocked():
     assert "Integrity validation: VALID" in fir
     assert "Promotion eligibility: BLOCKED" in fir
     assert "PROMOTION BLOCKER: trusted canonical lineage verifier is unavailable" in fir
+
+
+
+def test_malformed_lineage_entry_fails_closed_without_exception():
+    from src.canonical_vara import CanonicalVaraScanResult
+
+    scan = CanonicalVaraScanResult(
+        weak_signals=[], trends=[], anomalies=[], unspecified=[], lineage=[None]
+    )
+    valid, errors = CanonicalVaraIntegrity().validate(scan)
+    assert valid is False
+    assert errors == ["lineage[0] must be an object"]
+    assert CanonicalVaraPromoter().should_promote(scan) is False
