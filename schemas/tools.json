@@ -86,7 +86,7 @@
           },
           "lineage": {
             "type": "array",
-            "description": "Caller-supplied canonical Vara lineage entries. Required for canonical status; MCP never derives authoritative lineage.",
+            "description": "Caller-supplied canonical Vara lineage entries. Structural fields are not proof of authority; promotion remains blocked until a trusted canonical lineage verifier is connected.",
             "items": {
               "type": "object",
               "required": [
