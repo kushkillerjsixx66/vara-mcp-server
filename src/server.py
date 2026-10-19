@@ -81,6 +81,11 @@ def vara_run_scan(
     enable_multi_timescale: bool = True,
     use_firecrawl: bool = False,
     generate_fir: bool = False,
+    fir_series: str | None = None,
+    fir_baseline: str | None = None,
+    lineage: list[dict[str, Any]] | None = None,
+    identity: dict[str, Any] | None = None,
+    runtime_state: dict[str, Any] | None = None,
 ) -> Any:
     arguments = {
         "keywords": keywords,
@@ -93,6 +98,11 @@ def vara_run_scan(
         "enable_multi_timescale": enable_multi_timescale,
         "use_firecrawl": use_firecrawl,
         "generate_fir": generate_fir,
+        "fir_series": fir_series,
+        "fir_baseline": fir_baseline,
+        "lineage": lineage,
+        "identity": identity,
+        "runtime_state": runtime_state,
     }
     return _call("vara_run_scan", {k: v for k, v in arguments.items() if v is not None})
 
