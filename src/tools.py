@@ -375,7 +375,12 @@ def _render_fir_from_report(report: dict, arguments: dict) -> str:
     signals = report.get("signals") or []
     null = report.get("null_result", False)
     conformance = report.get("canonical_conformance") or {}
-    lineage_status = "PRESENT" if conformance.get("lineage_present") else "MISSING"
+    if not conformance.get("lineage_present"):
+        lineage_status = "MISSING"
+    elif conformance.get("lineage_verified"):
+        lineage_status = "PRESENT / VERIFIED"
+    else:
+        lineage_status = "PRESENT / UNVERIFIED"
     integrity_status = "VALID" if conformance.get("integrity_valid") else "INVALID"
     promotion_status = "ELIGIBLE (NOT EXECUTED)" if conformance.get("promotion_allowed") else "BLOCKED"
 
@@ -404,8 +409,11 @@ def _render_fir_from_report(report: dict, arguments: dict) -> str:
         f"  Promotion eligibility: {promotion_status}",
     ]
     errors = conformance.get("errors") or []
+    blockers = conformance.get("promotion_blockers") or []
     if errors:
-        lines.extend(f"  BLOCKER: {error}" for error in errors)
+        lines.extend(f"  INTEGRITY ERROR: {error}" for error in errors)
+    if blockers:
+        lines.extend(f"  PROMOTION BLOCKER: {blocker}" for blocker in blockers)
     lines += [
         "  Promotion execution: NOT REQUESTED / NOT EXECUTED",
         "",
