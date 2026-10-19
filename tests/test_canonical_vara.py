@@ -37,7 +37,7 @@ def test_lineage_is_preserved_exactly():
     assert result.lineage == lineage
 
 
-def test_governance_emits_canonical_pipeline_event_without_local_persistence():
+def test_governance_blocks_promotion_without_trusted_lineage_verifier():
     from src.canonical_vara import govern_operational_report
 
     result = govern_operational_report(
