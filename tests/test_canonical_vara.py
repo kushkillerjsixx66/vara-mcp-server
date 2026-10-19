@@ -279,7 +279,7 @@ def test_preliminary_fir_never_claims_canonical_promotion_without_lineage():
     assert "Caller-supplied lineage: MISSING" in fir
     assert "Integrity validation: INVALID" in fir
     assert "Promotion eligibility: BLOCKED" in fir
-    assert "BLOCKER: lineage is required for canonical Vara status" in fir
+    assert "INTEGRITY ERROR: lineage is required for canonical Vara status" in fir
     assert "NOT COMPUTED" in fir
 
 
