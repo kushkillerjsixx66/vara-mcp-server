@@ -24,6 +24,8 @@ TOOLS = [
                 "enable_multi_timescale": {"type": "boolean", "default": True},
                 "use_firecrawl": {"type": "boolean", "default": False},
                 "generate_fir": {"type": "boolean", "default": False},
+                "fir_series": {"type": "string", "description": "Optional explicit FIR series identifier. If omitted, a preliminary scan-bound identifier is used."},
+                "fir_baseline": {"type": "string", "description": "Optional baseline label for the generated FIR."},
                 "identity": {
                     "type": "object",
                     "description": "Optional caller-supplied operator identity for canonical Veil boundary validation. Identity does not create authority or lineage.",
