@@ -2,39 +2,286 @@
   "tools": [
     {
       "name": "vara_run_scan",
-      "description": "Execute a full Real Vara scan using the operational dual-track, multi-timescale pipeline.",
-      "annotations": {"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true},
-      "inputSchema": {"type": "object", "properties": {"keywords": {"type": "array", "items": {"type": "string"}}, "active_planes": {"type": "array", "items": {"type": "string", "enum": ["social", "scientific", "tech", "adjacent_possible", "economic", "dark", "geopolitical", "persons", "firecrawl"]}}, "sweep_depth_hours": {"type": "integer", "minimum": 1, "maximum": 720, "default": 24}, "scan_label": {"type": "string"}, "enable_dual_track": {"type": "boolean", "default": true}, "high_novelty_floor": {"type": "number", "default": 0.15}, "weak_novelty_floor": {"type": "number", "default": 0.05}, "enable_multi_timescale": {"type": "boolean", "default": true}, "use_firecrawl": {"type": "boolean", "default": false}, "generate_fir": {"type": "boolean", "default": false}}, "required": []}
+      "description": "Execute a full Real Vara scan. Caller-supplied lineage is passed through for canonical validation; the MCP never manufactures authority or lineage. Generated FIRs explicitly state conformance blockers and preliminary status.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "active_planes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "social",
+                "scientific",
+                "tech",
+                "adjacent_possible",
+                "economic",
+                "dark",
+                "geopolitical",
+                "persons",
+                "firecrawl"
+              ]
+            }
+          },
+          "sweep_depth_hours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 720,
+            "default": 24
+          },
+          "scan_label": {
+            "type": "string"
+          },
+          "enable_dual_track": {
+            "type": "boolean",
+            "default": true
+          },
+          "high_novelty_floor": {
+            "type": "number",
+            "default": 0.15
+          },
+          "weak_novelty_floor": {
+            "type": "number",
+            "default": 0.05
+          },
+          "enable_multi_timescale": {
+            "type": "boolean",
+            "default": true
+          },
+          "use_firecrawl": {
+            "type": "boolean",
+            "default": false
+          },
+          "generate_fir": {
+            "type": "boolean",
+            "default": false
+          },
+          "fir_series": {
+            "type": "string",
+            "description": "Optional explicit FIR series identifier. If omitted, a preliminary scan-bound identifier is used."
+          },
+          "fir_baseline": {
+            "type": "string",
+            "description": "Optional baseline label for the generated FIR."
+          },
+          "identity": {
+            "type": "object",
+            "description": "Optional caller-supplied operator identity for Veil boundary validation; does not create authority."
+          },
+          "runtime_state": {
+            "type": "object",
+            "description": "Optional caller-supplied runtime state for Veil boundary validation; does not create authority."
+          },
+          "lineage": {
+            "type": "array",
+            "description": "Caller-supplied canonical Vara lineage entries. Structural fields are not proof of authority; promotion remains blocked until a trusted canonical lineage verifier is connected.",
+            "items": {
+              "type": "object",
+              "required": [
+                "seq",
+                "operator_id",
+                "role",
+                "altitude"
+              ],
+              "properties": {
+                "seq": {},
+                "operator_id": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "altitude": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "required": []
+      }
     },
     {
       "name": "vara_list_scans",
       "description": "List historical Vara scan metadata.",
-      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
-      "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}, "since": {"type": "string"}, "label_contains": {"type": "string"}}}
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "since": {
+            "type": "string"
+          },
+          "label_contains": {
+            "type": "string"
+          }
+        }
+      }
     },
     {
       "name": "vara_get_scan",
       "description": "Retrieve a complete historical VaraScanReport by scan_id.",
-      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
-      "inputSchema": {"type": "object", "properties": {"scan_id": {"type": "string"}, "include_signals": {"type": "boolean", "default": true}}, "required": ["scan_id"]}
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scan_id": {
+            "type": "string"
+          },
+          "include_signals": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "scan_id"
+        ]
+      }
     },
     {
       "name": "vara_query_signals",
       "description": "Query the committed Vault corpus.",
-      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
-      "inputSchema": {"type": "object", "properties": {"plane": {"type": "string"}, "min_novelty": {"type": "number", "minimum": 0, "maximum": 1}, "entity": {"type": "string"}, "since": {"type": "string"}, "until": {"type": "string"}, "origin": {"type": "string", "enum": ["passed", "veil_promoted", "any"], "default": "any"}, "canonized_only": {"type": "boolean", "default": false}, "include_veil_hold": {"type": "boolean", "default": false}, "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}}}
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "plane": {
+            "type": "string"
+          },
+          "min_novelty": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "entity": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "veil_promoted",
+              "any"
+            ],
+            "default": "any"
+          },
+          "canonized_only": {
+            "type": "boolean",
+            "default": false
+          },
+          "include_veil_hold": {
+            "type": "boolean",
+            "default": false
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 50
+          }
+        }
+      }
     },
     {
       "name": "vara_get_veil_state",
       "description": "Inspect current Veil hold entries and trajectories.",
-      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
-      "inputSchema": {"type": "object", "properties": {"plane": {"type": "string"}, "signal_id": {"type": "string"}, "include_trajectories": {"type": "boolean", "default": true}}}
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "plane": {
+            "type": "string"
+          },
+          "signal_id": {
+            "type": "string"
+          },
+          "include_trajectories": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      }
     },
     {
       "name": "vara_generate_fir",
       "description": "Generate an Operator-Tier Field Intel Report from a scan_id.",
-      "annotations": {"readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
-      "inputSchema": {"type": "object", "properties": {"scan_id": {"type": "string"}, "series": {"type": "string"}, "baseline": {"type": "string"}, "format": {"type": "string", "enum": ["operator_tier", "lightweight"], "default": "operator_tier"}, "next_cycle_hint": {"type": "string"}}, "required": ["scan_id"]}}
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scan_id": {
+            "type": "string"
+          },
+          "series": {
+            "type": "string"
+          },
+          "baseline": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "operator_tier",
+              "lightweight"
+            ],
+            "default": "operator_tier"
+          },
+          "next_cycle_hint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scan_id"
+        ]
+      }
     }
   ]
 }

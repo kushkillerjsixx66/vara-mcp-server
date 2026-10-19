@@ -64,3 +64,15 @@ def test_run_scan_exposes_canonical_lineage_input():
 
     assert lineage["type"] == "array"
     assert lineage["items"]["required"] == ["seq", "operator_id", "role", "altitude"]
+
+
+
+def test_run_scan_exposes_fir_and_veil_context_inputs():
+    schema = next(tool["inputSchema"] for tool in TOOLS if tool["name"] == "vara_run_scan")
+    assert "fir_series" in schema["properties"]
+    assert "fir_baseline" in schema["properties"]
+    assert "identity" in schema["properties"]
+    assert "runtime_state" in schema["properties"]
+    assert "lineage" in schema["properties"]
+    lineage_description = schema["properties"]["lineage"]["description"]
+    assert "not proof of authority" in lineage_description

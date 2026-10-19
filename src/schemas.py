@@ -24,6 +24,8 @@ TOOLS = [
                 "enable_multi_timescale": {"type": "boolean", "default": True},
                 "use_firecrawl": {"type": "boolean", "default": False},
                 "generate_fir": {"type": "boolean", "default": False},
+                "fir_series": {"type": "string", "description": "Optional explicit FIR series identifier. If omitted, a preliminary scan-bound identifier is used."},
+                "fir_baseline": {"type": "string", "description": "Optional baseline label for the generated FIR."},
                 "identity": {
                     "type": "object",
                     "description": "Optional caller-supplied operator identity for canonical Veil boundary validation. Identity does not create authority or lineage.",
@@ -44,7 +46,7 @@ TOOLS = [
                 "canonical_promotion": {"type": "string", "description": "Canonical promotion is eligibility only. The public MCP never executes or commits Vault promotion; eligible results carry a governed handoff payload for the canonical Vault pipeline."},
                 "lineage": {
                     "type": "array",
-                    "description": "Caller-supplied canonical Vara lineage entries. Required for canonical status and promotion; MCP never derives authoritative lineage.",
+                    "description": "Caller-supplied canonical Vara lineage entries. Required for structural lineage checks, but not proof of authority; promotion remains blocked until a trusted canonical lineage verifier is connected.",
                     "items": {
                         "type": "object",
                         "required": ["seq", "operator_id", "role", "altitude"],
