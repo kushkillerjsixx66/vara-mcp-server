@@ -388,7 +388,7 @@ def _render_fir_from_report(report: dict, arguments: dict) -> str:
         f"FIELD INTEL REPORT  ·  SERIES {series}  ·  VARA:SCAN INTELLIGENCE LAYER",
         "",
         f"FIELD INTEL REPORT {series}",
-        f"VARA:SCAN CYCLE {report.get('scan_id','')[:8]}  |  Issued: {ts}",
+        f"VARA:SCAN CYCLE {scan_id[:8]}  |  Issued: {ts}",
         "",
         "Classification: Operator-Tier Intelligence Brief",
         f"Baseline: {baseline}",
