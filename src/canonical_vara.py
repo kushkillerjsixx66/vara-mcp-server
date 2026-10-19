@@ -105,6 +105,9 @@ class CanonicalVaraIntegrity:
             errors.append("lineage is required for canonical Vara status")
 
         for index, entry in enumerate(scan.lineage):
+            if not isinstance(entry, dict):
+                errors.append(f"lineage[{index}] must be an object")
+                continue
             missing = [key for key in REQUIRED_LINEAGE if key not in entry]
             if missing:
                 errors.append(f"lineage[{index}] missing: {','.join(missing)}")
