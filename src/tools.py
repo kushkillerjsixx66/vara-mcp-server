@@ -154,7 +154,10 @@ def vara_run_scan(arguments: dict) -> dict:
             }
 
     if arguments.get("generate_fir"):
-        result["field_intel_report"] = _render_fir_from_report(result, arguments)
+        fir_arguments = dict(arguments)
+        fir_arguments.setdefault("series", arguments.get("fir_series"))
+        fir_arguments.setdefault("baseline", arguments.get("fir_baseline"))
+        result["field_intel_report"] = _render_fir_from_report(result, fir_arguments)
 
     # Dual-write: local /tmp is hot cache; GitHub archive is durable.
     try:
@@ -363,12 +366,18 @@ def vara_get_veil_state(arguments: dict) -> dict:
 
 def _render_fir_from_report(report: dict, arguments: dict) -> str:
     """Minimal Operator-Tier FIR renderer."""
-    series = arguments.get("series") or "FIR-XXX"
+    scan_id = str(report.get("scan_id") or "unknown")
+    short_id = scan_id.replace("-", "")[:8].upper()
+    series = arguments.get("series") or f"FIR-PRELIM-{short_id}"
     baseline = arguments.get("baseline") or "prior"
     ts = report.get("timestamp") or datetime.datetime.utcnow().isoformat()
     planes = ", ".join(report.get("active_planes") or [])
     signals = report.get("signals") or []
     null = report.get("null_result", False)
+    conformance = report.get("canonical_conformance") or {}
+    lineage_status = "PRESENT" if conformance.get("lineage_present") else "MISSING"
+    integrity_status = "VALID" if conformance.get("integrity_valid") else "INVALID"
+    promotion_status = "ELIGIBLE (NOT EXECUTED)" if conformance.get("promotion_allowed") else "BLOCKED"
 
     lines = [
         f"FIELD INTEL REPORT  ·  SERIES {series}  ·  VARA:SCAN INTELLIGENCE LAYER",
@@ -386,7 +395,19 @@ def _render_fir_from_report(report: dict, arguments: dict) -> str:
         f"  Config hash: {report.get('config_hash')}",
         "",
         "SECTION 02 — TARGET NODE DELTA REGISTRY",
-        "  (Populate from high-novelty / entity signals in full implementation)",
+        "  NOT COMPUTED: this renderer does not have a validated target-node delta source.",
+        "  No target-node changes are asserted by this report.",
+        "",
+        "SECTION 03 — CANONICAL CONFORMANCE",
+        f"  Caller-supplied lineage: {lineage_status}",
+        f"  Integrity validation: {integrity_status}",
+        f"  Promotion eligibility: {promotion_status}",
+    ]
+    errors = conformance.get("errors") or []
+    if errors:
+        lines.extend(f"  BLOCKER: {error}" for error in errors)
+    lines += [
+        "  Promotion execution: NOT REQUESTED / NOT EXECUTED",
         "",
         "SECTION 05 — EMERGENT SIGNALS",
     ]
@@ -401,7 +422,7 @@ def _render_fir_from_report(report: dict, arguments: dict) -> str:
         "SECTION 08 — SIGNAL CONTINUITY — CARRY-FORWARD TO NEXT CYCLE",
         "  Review Veil hold and weak-signal trajectories before next cycle.",
         "",
-        f"VARA:SCAN {report.get('scan_id','')[:8]} · COMPILED BY OPERATOR INTELLIGENCE LAYER",
+        f"VARA:SCAN {scan_id[:8]} · PRELIMINARY REPORT; CANONICAL STATUS IS GOVERNED BY CONFORMANCE ABOVE",
     ]
     return "\n".join(lines)
 
