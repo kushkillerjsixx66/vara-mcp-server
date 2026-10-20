@@ -4,6 +4,17 @@ Machine-callable surface for the **Real Vara** sensory architecture (dual-track,
 
 This package wraps the operational Vara pipeline so it can be registered as a custom MCP connector in Grok (or any MCP-compatible client). It exposes both **live scanning** and **access to previously gathered signals**, enabling continuous Field Intel Report production.
 
+## The Lattice
+
+This server is part of **the Lattice** — a governance-first cognitive architecture for AI ("cognitive constitution"): layered gates (coherence · attention budget · reversibility), mandatory per-signal lineage, and refusal on insufficient evidence treated as a governed success.
+
+- **Live demo:** https://huggingface.co/spaces/Jeremysixx66/lattice-demo
+- **Paper (SSRN, July 2026):** https://doi.org/10.2139/ssrn.7141439
+- **Writing:** https://liminaljermo.substack.com
+- **Spec bundle (Zenodo):** https://doi.org/10.5281/zenodo.23242183
+- **Archive and source map (are.na):** https://www.are.na/jeremy-sebastian
+- **ORCID:** https://orcid.org/0009-0000-0609-822X
+
 ## Goals
 
 - Make the real Vara scan architecture callable (`vara_run_scan`)
