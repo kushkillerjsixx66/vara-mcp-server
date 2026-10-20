@@ -1,5 +1,7 @@
 # Vara MCP Server
 
+<a href="https://lounge.ai/@liminaljermo"><img src="https://lounge.ai/api/badge/liminaljermo" alt="Jeremy Sebastian on Lounge" height="28"></a>
+
 Machine-callable surface for the **Real Vara** sensory architecture (dual-track, multi-timescale, Sentinel-gated, Veil/Vault-mediated).
 
 This package wraps the operational Vara pipeline so it can be registered as a custom MCP connector in Grok (or any MCP-compatible client). It exposes both **live scanning** and **access to previously gathered signals**, enabling continuous Field Intel Report production.
