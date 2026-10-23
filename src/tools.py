@@ -51,7 +51,26 @@ def vara_run_scan(arguments: dict) -> dict:
             "hint": "Set VARA_PACKAGE_PATH to the directory containing vara_scan.py",
         }
 
-    keywords = arguments.get("keywords") or ["AI", "agentic", "compute"]
+    keywords = arguments.get("keywords")
+    if not keywords:
+        try:
+            from entity_watchlist import DEFAULT_SCAN_KEYWORDS
+
+            keywords = list(DEFAULT_SCAN_KEYWORDS)
+        except Exception:
+            keywords = ["AI", "agentic", "compute"]
+
+    # True entity targeting (operator directive 2026-10-23): when
+    # target_entities is set, entity names join the harvest keywords, each
+    # entity contributes its news domains (Google News query feed + any
+    # verified official newsroom feed) to the harvest, and the vendor
+    # pipeline keeps only signals that actually name a target entity.
+    target_entities = arguments.get("target_entities") or []
+    if not isinstance(target_entities, list):
+        return {"error": "target_entities must be a list of entity names"}
+    target_entities = [str(e).strip() for e in target_entities if str(e).strip()]
+    if target_entities:
+        keywords = list(keywords) + [e for e in target_entities if e not in keywords]
     planes = arguments.get("active_planes") or list(config.DEFAULT_PLANES)
     sweep = int(arguments.get("sweep_depth_hours") or config.DEFAULT_SWEEP_HOURS)
     # Canonical lineage is authority-bearing context and must be supplied by
@@ -95,6 +114,24 @@ def vara_run_scan(arguments: dict) -> dict:
     ):
         if key in arguments:
             cfg_kwargs[key] = arguments[key]
+
+    if target_entities:
+        from entity_watchlist import entity_feed_urls
+
+        generated_feeds = entity_feed_urls(target_entities)
+        for feed_url in generated_feeds:
+            try:
+                ssrf_guard.validate_url(feed_url, caller_supplied=True)
+            except ssrf_guard.SSRFError as e:
+                return {
+                    "error": f"SSRF guard rejected entity feed: {e}",
+                    "hint": "Entity feeds are generated server-side; configure VARA_FEED_HOST_ALLOWLIST to widen access deliberately.",
+                }
+        caller_feeds = list(cfg_kwargs.get("extra_rss_feeds") or [])
+        cfg_kwargs["extra_rss_feeds"] = caller_feeds + [
+            u for u in generated_feeds if u not in caller_feeds
+        ]
+        cfg_kwargs["target_entities"] = target_entities
 
     try:
         cfg = VaraConfig(**cfg_kwargs)

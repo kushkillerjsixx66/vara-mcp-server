@@ -81,9 +81,13 @@ def vara_run_scan(
     enable_multi_timescale: bool = True,
     use_firecrawl: bool = False,
     generate_fir: bool = False,
+    extra_rss_feeds: list[str] | None = None,
+    extra_substacks: list[str] | None = None,
+    target_entities: list[str] | None = None,
 ) -> Any:
     arguments = {
         "keywords": keywords,
+        "target_entities": target_entities,
         "active_planes": active_planes,
         "sweep_depth_hours": sweep_depth_hours,
         "scan_label": scan_label,
@@ -93,6 +97,11 @@ def vara_run_scan(
         "enable_multi_timescale": enable_multi_timescale,
         "use_firecrawl": use_firecrawl,
         "generate_fir": generate_fir,
+        # Caller-supplied feeds: SSRF-guarded at the tool boundary and at
+        # the vendor fetch site (private/link-local destinations rejected,
+        # optional VARA_FEED_HOST_ALLOWLIST enforced). See src/ssrf_guard.py.
+        "extra_rss_feeds": extra_rss_feeds,
+        "extra_substacks": extra_substacks,
     }
     return _call("vara_run_scan", {k: v for k, v in arguments.items() if v is not None})
 
@@ -370,6 +379,8 @@ def scan_lineage_resource(scan_id: str) -> str:
         gaps.append("per-signal retrieved_at is not recorded by the scan pipeline")
     if signals and all("disposition" not in s for s in signals):
         gaps.append("per-signal disposition is not recorded in scan reports")
+    if signals and all("content_hash" not in s for s in signals):
+        gaps.append("per-signal content_hash is not recorded in scan reports")
     return _json.dumps(
         {
             "scan_id": data.get("scan_id"),
@@ -379,16 +390,20 @@ def scan_lineage_resource(scan_id: str) -> str:
             "keywords": data.get("keywords"),
             "active_planes": data.get("active_planes"),
             "canonical_conformance": data.get("canonical_conformance"),
+            "signal_lineage": data.get("signal_lineage"),
+            "all_signals": data.get("all_signals"),
             "signals": [
                 {
                     "signal_id": s.get("signal_id") or s.get("source_id"),
                     "source_id": s.get("source_id"),
+                    "source": s.get("source") or s.get("source_id"),
                     "url": s.get("url"),
                     "feed_tier": s.get("feed_tier"),
                     "entity_first_seen": s.get("entity_first_seen"),
                     "track": s.get("track"),
                     "retrieved_at": s.get("retrieved_at"),
                     "disposition": s.get("disposition"),
+                    "content_hash": s.get("content_hash"),
                     "uri": f"vara://scan/{data.get('scan_id')}/signal/{_signal_address(s, i)}",
                 }
                 for i, s in enumerate(signals)
@@ -411,12 +426,17 @@ def veil_state_resource() -> str:
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(request):
+    from . import durable as _durable
+    from . import ssrf_guard as _ssrf
+
     return {
         "status": "ok",
         "service": "vara-mcp",
         "mcp_base": "/api/mcp",
         "package_path": str(config.VARA_PACKAGE_PATH),
         "data_root": str(config.VARA_DATA_ROOT),
+        "durable": {"backend": _durable.backend_name(), "enabled": _durable.enabled()},
+        "ssrf_guard": {"module": "src.ssrf_guard", "feed_allowlist_configured": bool(_ssrf.feed_host_allowlist())},
         "tools": [
             "vara_run_scan",
             "vara_list_scans",

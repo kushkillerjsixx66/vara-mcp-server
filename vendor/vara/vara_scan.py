@@ -38,6 +38,11 @@ class VaraConfig:
     output_formats: list = field(default_factory=lambda: ["markdown", "json"])
     extra_rss_feeds: list = field(default_factory=list)
     extra_substacks: list = field(default_factory=list)
+    # True entity targeting: when non-empty, only signals naming at least
+    # one of these entities (word-boundary match over title + content)
+    # proceed past enrichment; the rest are counted in the report's
+    # entity_filter stats, never silently dropped.
+    target_entities: list = field(default_factory=list)
     use_firecrawl: bool = False
     enable_dual_track: bool = True
     high_novelty_floor: float = 0.15
@@ -59,6 +64,7 @@ class VaraConfig:
         payload = json.dumps(
             {
                 "keywords": sorted(self.keywords),
+                "target_entities": sorted(self.target_entities),
                 "sweep_depth_hours": self.sweep_depth_hours,
                 "active_planes": sorted(self.active_planes),
                 "scan_label": self.scan_label,
@@ -94,6 +100,7 @@ class VaraScanReport:
     error: Optional[str] = None
     sentinel: Optional[dict] = None
     routing: Optional[dict] = None
+    entity_filter: Optional[dict] = None
     weak_signals: Optional[list] = None
     # Defect C: the FULL harvested set with per-signal provenance +
     # disposition — including blocked/pruned/deferred/veil-held signals,
@@ -258,6 +265,39 @@ def stage_enrich_entities(signals: list) -> list:
         return signals
 
 
+def stage_entity_filter(signals: list, entities: list) -> tuple:
+    """True entity targeting.
+
+    Keep only signals whose title + content name at least one target
+    entity (word-boundary match via entity_watchlist.match_entities);
+    stamp each kept signal with its `matched_entities`. Returns
+    (kept, stats) — the dropped count is recorded in stats, so the
+    filter is provenance, not silent loss.
+    """
+    from entity_watchlist import match_entities
+
+    kept = []
+    per_entity: dict = {}
+    for sig in signals:
+        if not isinstance(sig, dict):
+            continue
+        text = f"{sig.get('title', '')} {sig.get('content', '')}"
+        matched = match_entities(text, entities)
+        if matched:
+            sig["matched_entities"] = matched
+            for name in matched:
+                per_entity[name] = per_entity.get(name, 0) + 1
+            kept.append(sig)
+    stats = {
+        "targets": list(entities),
+        "pre_filter": len(signals),
+        "kept": len(kept),
+        "dropped": len(signals) - len(kept),
+        "per_entity": per_entity,
+    }
+    return kept, stats
+
+
 def stage_dual_track(signals: list, config: VaraConfig) -> tuple:
     """Split into high-novelty and weak-signal tracks.
 
@@ -380,6 +420,30 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         logger.warning("stage_drift unavailable: %s", exc)
     normalized = stage_enrich_entities(normalized)
 
+    entity_filter_stats = None
+    if config.target_entities:
+        pre_filter_count = len(normalized)
+        normalized, entity_filter_stats = stage_entity_filter(
+            normalized, config.target_entities
+        )
+        if not normalized:
+            return VaraScanReport(
+                scan_id=scan_id, scan_label=config.scan_label, timestamp=timestamp,
+                config_hash=config.config_hash, keywords=config.keywords,
+                active_planes=config.active_planes, signals=[], clusters=[],
+                drift_log=drift_entries, null_result=True,
+                routing={
+                    "harvested": pre_filter_count,
+                    "vault_bound": 0,
+                    "veil_held": 0,
+                    "veil_promoted": 0,
+                    "states": {},
+                    "entity_filter": entity_filter_stats,
+                },
+                entity_filter=entity_filter_stats,
+                all_signals=[],
+            )
+
     below_floor: list = []
     sentinel_reports: list = []
     if config.enable_dual_track:
@@ -469,7 +533,9 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
             "veil_held": len(getattr(veil_report, "held_entries", []) or []),
             "veil_promoted": getattr(veil_report, "promoted", 0),
             "states": disposition_counts,
+            **({"entity_filter": entity_filter_stats} if entity_filter_stats else {}),
         },
+        entity_filter=entity_filter_stats,
         weak_signals=weak_out if config.enable_dual_track else None,
         all_signals=all_harvested,
     )

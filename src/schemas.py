@@ -15,6 +15,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "keywords": {"type": "array", "items": {"type": "string"}},
+                "target_entities": {"type": "array", "items": {"type": "string"}, "description": "True entity targeting: when set, only signals whose title/content name at least one listed entity (word-boundary match) proceed to routing/clustering; dropped signals are counted in the report's entity_filter stats. Each entity also contributes harvest domains automatically (a Google News query feed plus any verified official newsroom feed), and entity names join the harvest keywords."},
                 "active_planes": {"type": "array", "items": {"type": "string", "enum": ["social", "scientific", "tech", "adjacent_possible", "economic", "dark", "geopolitical", "persons", "firecrawl"]}},
                 "sweep_depth_hours": {"type": "integer", "minimum": 1, "maximum": 720, "default": 24},
                 "scan_label": {"type": "string"},
@@ -24,6 +25,8 @@ TOOLS = [
                 "enable_multi_timescale": {"type": "boolean", "default": True},
                 "use_firecrawl": {"type": "boolean", "default": False},
                 "generate_fir": {"type": "boolean", "default": False},
+                "extra_rss_feeds": {"type": "array", "items": {"type": "string"}, "description": "Caller-supplied RSS/Atom feed URLs. SSRF-guarded: public http(s) only, private/link-local/loopback destinations rejected at validation and at connect time, redirect hops re-validated, optional VARA_FEED_HOST_ALLOWLIST enforced."},
+                "extra_substacks": {"type": "array", "items": {"type": "string"}, "description": "Caller-supplied Substack base URLs (the /feed path is appended). Same SSRF guard as extra_rss_feeds."},
                 "identity": {
                     "type": "object",
                     "description": "Optional caller-supplied operator identity for canonical Veil boundary validation. Identity does not create authority or lineage.",
