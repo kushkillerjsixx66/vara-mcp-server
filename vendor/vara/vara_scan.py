@@ -142,6 +142,31 @@ def stage_intake(config: VaraConfig) -> tuple:
                         sig["content_hash"] = hashlib.sha256(
                             str(sig.get("content") or "").encode()
                         ).hexdigest()
+                    # PORT FIX (PR #14, Codex P1): canonical harvesters emit
+                    # relevance_score; the dual-track splitter and Sentinel
+                    # consume novelty_score. Map at the boundary so no
+                    # harvested signal is silently evaluated as zero
+                    # novelty. (Vendor-line novelty was relevance-derived.)
+                    if "novelty_score" not in sig and sig.get("relevance_score") is not None:
+                        sig["novelty_score"] = sig["relevance_score"]
+                    # PORT FIX (PR #14, Codex P2): signal identity must be
+                    # a function of the persisted record. The Veil
+                    # migration reconstructs legacy IDs via
+                    # _compute_signal_id over STORED (truncated) content,
+                    # while harvesters compute it over full content — so
+                    # re-base any sig:-identity here, over the stored form.
+                    _sid = sig.get("signal_id")
+                    if isinstance(_sid, str) and _sid.startswith("sig:"):
+                        try:
+                            from vara_harvesters import _compute_signal_id
+
+                            sig["signal_id"] = _compute_signal_id(
+                                sig.get("plane", ""),
+                                sig.get("title", ""),
+                                sig.get("content", ""),
+                            )
+                        except Exception:
+                            pass
             all_signals.extend(plane_sigs)
             logger.info("Intake plane=%s signals=%d", plane, len(plane_sigs))
         except Exception as e:
