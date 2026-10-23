@@ -31,7 +31,23 @@ class Vara:
         self.last_scan   = None
         self._scan_count = 0
 
+    # ── Public API ──────────────────────────────────────────────────────────
+
     def run(self, config=None) -> dict:
+        """
+        Execute one Vara scan cycle.
+
+        Parameters
+        ----------
+        config : VaraConfig | None
+            If None, a default config is built from the lattice context
+            or a safe empty default.
+
+        Returns
+        -------
+        dict
+            Serialized VaraScanReport.
+        """
         from vara_scan import run_vara_scan, VaraConfig
 
         if config is None:
@@ -48,6 +64,7 @@ class Vara:
         return asdict(report)
 
     def status(self) -> dict:
+        """Return a lightweight status dict for the operator console."""
         return {
             "vara_version": self.VERSION,
             "scan_count":   self._scan_count,

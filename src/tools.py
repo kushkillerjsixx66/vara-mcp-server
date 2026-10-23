@@ -13,6 +13,8 @@ from typing import Any, Optional
 
 from . import config
 from . import durable
+from . import lineage as lineage_mod
+from . import ssrf_guard
 from .canonical_vara import govern_operational_report
 from .canonical_veil import CanonicalVeilBoundaryAdapter
 
@@ -60,6 +62,26 @@ def vara_run_scan(arguments: dict) -> dict:
     supervisor_runtime = arguments.get("runtime_state")
     label = arguments.get("scan_label") or f"mcp_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M')}"
 
+    # Defect A (SSRF guard): caller-supplied feeds are validated at this
+    # boundary — and again at the vendor fetch site — before any fetch.
+    # A rejected feed fails the scan closed; it is never fetched.
+    for arg_key in ("extra_rss_feeds", "extra_substacks"):
+        feeds = arguments.get(arg_key) or []
+        if not isinstance(feeds, list):
+            return {"error": f"{arg_key} must be a list of URLs"}
+        for feed_url in feeds:
+            # Substack entries are base URLs; the vendor appends "/feed".
+            candidate = str(feed_url)
+            if arg_key == "extra_substacks" and not candidate.rstrip("/").endswith("/feed"):
+                candidate = candidate.rstrip("/") + "/feed"
+            try:
+                ssrf_guard.validate_url(candidate, caller_supplied=True)
+            except ssrf_guard.SSRFError as e:
+                return {
+                    "error": f"SSRF guard rejected caller-supplied feed in {arg_key}: {e}",
+                    "hint": "Feeds must be public http(s) URLs; configure VARA_FEED_HOST_ALLOWLIST / VARA_FEED_ALLOW_PRIVATE_HOSTS to widen access deliberately.",
+                }
+
     cfg_kwargs = {
         "keywords": keywords,
         "sweep_depth_hours": sweep,
@@ -69,6 +91,7 @@ def vara_run_scan(arguments: dict) -> dict:
     for key in (
         "enable_dual_track", "high_novelty_floor", "weak_novelty_floor",
         "enable_multi_timescale", "use_firecrawl",
+        "extra_rss_feeds", "extra_substacks",
     ):
         if key in arguments:
             cfg_kwargs[key] = arguments[key]
@@ -76,7 +99,14 @@ def vara_run_scan(arguments: dict) -> dict:
     try:
         cfg = VaraConfig(**cfg_kwargs)
     except TypeError:
-        cfg = VaraConfig(
+        # Older vendor VaraConfig without some optional fields: drop the
+        # caller-feed kwargs (already SSRF-validated above) and retry.
+        for key in ("extra_rss_feeds", "extra_substacks"):
+            cfg_kwargs.pop(key, None)
+        try:
+            cfg = VaraConfig(**cfg_kwargs)
+        except TypeError:
+            cfg = VaraConfig(
             keywords=keywords,
             sweep_depth_hours=sweep,
             active_planes=planes,
@@ -101,11 +131,16 @@ def vara_run_scan(arguments: dict) -> dict:
         "vault": getattr(vvv, "VAULT_PATH", "vault_signals.json"),
         "veil": getattr(vvv, "VEIL_HOLD_PATH", "veil_hold.json"),
         "watchlist": getattr(ew, "WATCHLIST_PATH", "entity_watchlist_state.json"),
+        "drift": getattr(vs, "DRIFT_LOG_PATH", "vara_drift_log.json"),
     }
     vs.OUTPUT_DIR = str(config.OUTPUT_DIR)
     vvv.VAULT_PATH = str(config.VAULT_SIGNALS_PATH)
     vvv.VEIL_HOLD_PATH = str(config.VEIL_HOLD_PATH)
     ew.WATCHLIST_PATH = str(config.VARA_DATA_ROOT / "entity_watchlist_state.json")
+    # PR #14 (Codex P2): the ported canonical stage_drift persists via
+    # vara_scan.DRIFT_LOG_PATH; retarget it with the other state paths or
+    # drift history silently never persists on read-only deployments.
+    vs.DRIFT_LOG_PATH = str(config.VARA_DATA_ROOT / "vara_drift_log.json")
 
     try:
         report = run_vara_scan(cfg)
@@ -114,6 +149,7 @@ def vara_run_scan(arguments: dict) -> dict:
         vvv.VAULT_PATH = original_paths["vault"]
         vvv.VEIL_HOLD_PATH = original_paths["veil"]
         ew.WATCHLIST_PATH = original_paths["watchlist"]
+        vs.DRIFT_LOG_PATH = original_paths["drift"]
 
     if hasattr(report, "__dataclass_fields__"):
         from dataclasses import asdict
@@ -123,6 +159,10 @@ def vara_run_scan(arguments: dict) -> dict:
     else:
         result = {"raw": str(report)}
 
+    # Defect C: stamp per-signal provenance (source / retrieved_at /
+    # disposition / content_hash), build all_signals + signal_lineage, then
+    # govern — governance projects the signal lineage into canonical form.
+    result = lineage_mod.enrich_report(result)
     result = govern_operational_report(result, lineage)
     if supervisor_identity and supervisor_runtime:
         veil = CanonicalVeilBoundaryAdapter()
@@ -156,7 +196,7 @@ def vara_run_scan(arguments: dict) -> dict:
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
 
-    # Dual-write: local /tmp is hot cache; GitHub archive is durable.
+    # Dual-write: local /tmp is hot cache; durable backend (Blob preferred) is the archive.
     try:
         scan_id = str(result.get("scan_id") or "")
         short = scan_id.replace("-", "")[:8]
