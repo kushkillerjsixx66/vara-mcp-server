@@ -95,6 +95,10 @@ class VaraScanReport:
     sentinel: Optional[dict] = None
     routing: Optional[dict] = None
     weak_signals: Optional[list] = None
+    # Defect C: the FULL harvested set with per-signal provenance +
+    # disposition — including blocked/pruned/deferred/veil-held signals,
+    # which are absent from `signals` (output only). Marked, not dropped.
+    all_signals: Optional[list] = None
 
 
 def harvest_plane(plane: str, keywords: list, sweep_hours: int, **kwargs) -> list:
@@ -126,11 +130,99 @@ def stage_intake(config: VaraConfig) -> tuple:
                 extra_rss_feeds=config.extra_rss_feeds,
                 extra_substacks=config.extra_substacks,
             )
+            # Defect C: guarantee provenance fields at intake for any
+            # harvester that did not stamp them itself.
+            intake_ts = datetime.datetime.utcnow().isoformat()
+            for sig in plane_sigs:
+                if isinstance(sig, dict):
+                    sig.setdefault("retrieved_at", intake_ts)
+                    if not sig.get("source"):
+                        sig["source"] = sig.get("source_id") or sig.get("url") or ""
+                    if not sig.get("content_hash"):
+                        sig["content_hash"] = hashlib.sha256(
+                            str(sig.get("content") or "").encode()
+                        ).hexdigest()
             all_signals.extend(plane_sigs)
             logger.info("Intake plane=%s signals=%d", plane, len(plane_sigs))
         except Exception as e:
             logger.error("Intake plane=%s failed: %s", plane, e)
     return all_signals, errors
+
+
+def _load_drift_log() -> list:
+    if not os.path.exists(DRIFT_LOG_PATH):
+        return []
+    try:
+        with open(DRIFT_LOG_PATH, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+
+def _save_drift_log(log: list) -> None:
+    # Keep last 500 entries
+    trimmed = log[-500:]
+    with open(DRIFT_LOG_PATH, "w") as f:
+        json.dump(trimmed, f, indent=2)
+
+
+def stage_drift(
+    signals:    list,
+    config:     VaraConfig,
+    scan_id:    str,
+) -> tuple:
+    """
+    Compare raw_velocity against prior scan history.
+    Tags signals with velocity_score and detects spikes.
+
+    Returns (enriched_signals: list[dict], drift_entries: list[dict]).
+    """
+    drift_log    = _load_drift_log()
+    drift_entries = []
+    enriched     = []
+
+    # Build plane->velocity history from prior log
+    plane_history = {}
+    for entry in drift_log[-100:]:
+        p  = entry.get("plane", "")
+        rv = entry.get("raw_velocity", 0.0)
+        plane_history.setdefault(p, []).append(rv)
+
+    for sig in signals:
+        plane = sig.get("plane", "")
+        rv    = sig.get("raw_velocity", 0.0)
+        hist  = plane_history.get(plane, [])
+
+        if hist:
+            import statistics as _stats
+            mean_rv = _stats.mean(hist)
+            std_rv  = _stats.pstdev(hist) or 0.01
+            z_score = (rv - mean_rv) / std_rv
+            spike   = z_score >= config.velocity_spike_threshold
+        else:
+            z_score = 0.0
+            spike   = False
+
+        sig["velocity_score"] = round(max(0.0, min(1.0, rv + (z_score * 0.05))), 4)
+        sig["velocity_spike"] = spike
+        enriched.append(sig)
+
+        entry = {
+            "scan_id":      scan_id,
+            "plane":        plane,
+            "source_id":    sig.get("source_id", ""),
+            "raw_velocity": rv,
+            "z_score":      round(z_score, 4),
+            "spike":        spike,
+            "timestamp":    datetime.datetime.utcnow().isoformat(),
+        }
+        drift_entries.append(entry)
+
+    _save_drift_log(drift_log + drift_entries)
+    return enriched, drift_entries
+
+
+# ─── STAGE: CLUSTER ──────────────────────────────────────────────────────────
 
 
 def stage_enrich_entities(signals: list) -> list:
@@ -142,8 +234,13 @@ def stage_enrich_entities(signals: list) -> list:
 
 
 def stage_dual_track(signals: list, config: VaraConfig) -> tuple:
-    """Split into high-novelty and weak-signal tracks."""
-    high, weak = [], []
+    """Split into high-novelty and weak-signal tracks.
+
+    Returns (high, weak, below_floor). Below-floor signals used to be
+    dropped here entirely; they are now returned so the report can carry
+    them with a pruned disposition (Defect C).
+    """
+    high, weak, below = [], [], []
     for sig in signals:
         if not isinstance(sig, dict):
             continue
@@ -156,55 +253,61 @@ def stage_dual_track(signals: list, config: VaraConfig) -> tuple:
             weak.append(sig)
         else:
             sig["track"] = "below_floor"
-    return high, weak
+            below.append(sig)
+    return high, weak, below
 
 
 def stage_cluster(signals: list, config: VaraConfig) -> tuple:
-    """Semantic HDBSCAN clustering. Noise is preserved, never silently discarded."""
+    """Cluster via the canonical vara_clustering contract.
+
+    PORT (Fork 2, 2026-10-23): the canonical clustering interface is
+    ``vara_clustering.engine.cluster_signals(signals, scan_id)``; per
+    operator ruling the backend behind that contract remains the
+    HDBSCAN semantic engine (vendored ``clustering`` package). The
+    adapter returns canonical Cluster records (with lineage) and this
+    stage stamps membership back onto the signal dicts. Noise is
+    preserved, never silently discarded.
+    """
     if not signals:
         return [], []
-
     try:
-        from clustering import ClusteringEngine
+        from vara_clustering.engine import cluster_signals
 
-        class ClusterConfig:
-            min_cluster_size = max(2, int(config.clustering_min_cluster_size))
-            min_samples = max(1, int(config.clustering_min_samples))
-            metric = config.clustering_metric
-            cluster_selection_epsilon = float(config.cluster_selection_epsilon)
-            embedding_model = config.embedding_model
-            embedding_backend = getattr(config, "embedding_backend", "lightweight")
-            embedding_dimensions = getattr(config, "embedding_dimensions", 256)
-            enable_incremental_lineage = bool(config.enable_incremental_lineage)
-
-        engine = ClusteringEngine(config=ClusterConfig(), logger=logger)
-        result = engine.cluster(signals)
-
-        by_id = {s.get("signal_id"): s for s in signals}
-        for index, signal in enumerate(signals):
+        backend_config = {
+            "min_cluster_size": max(2, int(config.clustering_min_cluster_size)),
+            "min_samples": max(1, int(config.clustering_min_samples)),
+            "metric": config.clustering_metric,
+            "cluster_selection_epsilon": float(config.cluster_selection_epsilon),
+            "embedding_model": config.embedding_model,
+            "embedding_backend": getattr(config, "embedding_backend", "lightweight"),
+            "embedding_dimensions": getattr(config, "embedding_dimensions", 256),
+            "enable_incremental_lineage": bool(config.enable_incremental_lineage),
+        }
+        _clustered, clusters = cluster_signals(
+            signals,
+            scan_id=getattr(config, "scan_id", "") or "",
+            backend_config=backend_config,
+        )
+        member_of = {}
+        coherence_of = {}
+        for c in clusters:
+            coherence_of[c["cluster_id"]] = c.get("coherence", 0.0)
+            for mid in c.get("member_ids", []):
+                member_of[mid] = c["cluster_id"]
+        for signal in signals:
             sid = signal.get("signal_id")
-            if not sid:
-                sid = engine._signal_id(signal, index)
-                signal["signal_id"] = sid
-            membership = result.soft_membership.get(sid, {})
-            if membership:
-                cid, probability = next(iter(membership.items()))
-                signal["cluster_id"] = cid
-                signal["cluster_probability"] = probability
+            if sid and sid in member_of:
+                signal["cluster_id"] = member_of[sid]
+                # Canonical coherence = mean membership probability.
+                signal["cluster_probability"] = coherence_of.get(member_of[sid], 0.0)
                 signal["cluster_state"] = "clustered"
             else:
                 signal["cluster_id"] = None
                 signal["cluster_probability"] = 0.0
                 signal["cluster_state"] = "noise"
-
-        clusters = [c.model_dump() for c in result.clusters]
-        for noise_id in result.noise_signals:
-            if noise_id in by_id:
-                by_id[noise_id]["cluster_state"] = "noise"
         return signals, clusters
     except Exception as exc:
-        logger.error("Semantic clustering unavailable: %s", exc)
-        # Preserve observations as explicit noise rather than reverting to fake clusters.
+        logger.error("Canonical clustering unavailable: %s", exc)
         for signal in signals:
             signal["cluster_id"] = None
             signal["cluster_probability"] = 0.0
@@ -218,6 +321,7 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
     config.config_hash = config.compute_hash()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+    config.scan_id = scan_id
     raw_signals, intake_errors = stage_intake(config)
     if intake_errors:
         return VaraScanReport(
@@ -244,15 +348,23 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         else:
             normalized.append({"content": str(s), "novelty_score": 0.1, "plane": "tech"})
 
+    drift_entries = []
+    try:
+        normalized, drift_entries = stage_drift(normalized, config, scan_id)
+    except Exception as exc:  # port guard: drift persistence is CWD-relative
+        logger.warning("stage_drift unavailable: %s", exc)
     normalized = stage_enrich_entities(normalized)
 
+    below_floor: list = []
+    sentinel_reports: list = []
     if config.enable_dual_track:
-        high, weak = stage_dual_track(normalized, config)
+        high, weak, below_floor = stage_dual_track(normalized, config)
         clustered_high, clusters_high = stage_cluster(high, config)
         clustered_weak, clusters_weak = stage_cluster(weak, config)
         clusters = clusters_high + clusters_weak
         sentinel_high = run_sentinel(clustered_high, scan_id, weak_track=False)
         sentinel_weak = run_sentinel(clustered_weak, scan_id, weak_track=True)
+        sentinel_reports = [sentinel_high, sentinel_weak]
         handoff_high = sentinel_to_vault_handoff(sentinel_high)
         handoff_weak = sentinel_to_vault_handoff(sentinel_weak)
         passed = handoff_high["passed_signals"] + handoff_weak["passed_signals"]
@@ -270,6 +382,7 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
     else:
         clustered, clusters = stage_cluster(normalized, config)
         sentinel_report = run_sentinel(clustered, scan_id)
+        sentinel_reports = [sentinel_report]
         handoff = sentinel_to_vault_handoff(sentinel_report)
         veil_report = run_veil(handoff["deferred_signals"], scan_id)
         output_signals = handoff["passed_signals"] + list(getattr(veil_report, "promoted_signals", []) or [])
@@ -280,6 +393,39 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         }
         weak_out = []
 
+    # Defect C: record every harvested signal's disposition on the signal
+    # itself. The same dict objects flow through every stage, so object
+    # identity is the join key. Precedence: promoted > passed > veil_held
+    # (deferred, still held) > blocked > pruned > below-floor pruned.
+    promoted_ids = {id(s) for s in (getattr(veil_report, "promoted_signals", []) or [])}
+    passed_ids = {id(s) for r in sentinel_reports for s in r.passed_signals}
+    deferred_ids = {id(s) for r in sentinel_reports for s in r.deferred_signals}
+    blocked_ids = {id(s) for r in sentinel_reports for s in r.blocked_signals}
+    pruned_ids = {id(s) for r in sentinel_reports for s in r.pruned_signals}
+    all_harvested = clustered + below_floor
+    for sig in all_harvested:
+        if not isinstance(sig, dict):
+            continue
+        if id(sig) in promoted_ids:
+            sig["disposition"] = "promoted"
+        elif id(sig) in passed_ids:
+            sig["disposition"] = "vault_bound"
+        elif id(sig) in deferred_ids:
+            sig["disposition"] = "veil_held"
+        elif id(sig) in blocked_ids:
+            sig["disposition"] = "blocked"
+        elif id(sig) in pruned_ids:
+            sig["disposition"] = "pruned"
+        elif sig.get("track") == "below_floor":
+            sig["disposition"] = "pruned"
+        else:
+            sig.setdefault("disposition", "harvested")
+    disposition_counts: dict = {}
+    for sig in all_harvested:
+        if isinstance(sig, dict):
+            d = sig.get("disposition", "harvested")
+            disposition_counts[d] = disposition_counts.get(d, 0) + 1
+
     report = VaraScanReport(
         scan_id=scan_id,
         scan_label=config.scan_label,
@@ -289,16 +435,18 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
         active_planes=config.active_planes,
         signals=output_signals,
         clusters=clusters,
-        drift_log=[],
+        drift_log=drift_entries,
         null_result=len(clustered) == 0,
         sentinel=sentinel_summary,
         routing={
-            "harvested": len(clustered),
+            "harvested": len(all_harvested),
             "vault_bound": len(output_signals),
             "veil_held": len(getattr(veil_report, "held_entries", []) or []),
             "veil_promoted": getattr(veil_report, "promoted", 0),
+            "states": disposition_counts,
         },
         weak_signals=weak_out if config.enable_dual_track else None,
+        all_signals=all_harvested,
     )
 
     out_path = os.path.join(OUTPUT_DIR, f"scan_{scan_id[:8]}.json")
