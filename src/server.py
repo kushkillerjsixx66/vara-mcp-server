@@ -469,17 +469,52 @@ class _NormalizeMcpPath:
     """Rewrite /api/mcp → /api/mcp/ internally so the mounted app matches.
 
     No client-visible redirect; the original POST body is preserved.
+
+    CPU-burn guard (2026-10-29): this server is stateless (stateless_http,
+    json_response) and has no server-initiated messages to stream, but the
+    SDK's GET handler still opens an SSE stream that never closes — on
+    Vercel each such GET ran to the 300s function cap and burned Fluid
+    Active CPU (directory crawlers probing the endpoint made it a daily
+    bleed). The MCP spec permits a server that offers no standalone SSE
+    stream to answer GET with 405; do exactly that, immediately, and the
+    same for DELETE (no sessions exist to terminate). POST is untouched.
     """
+
+    _BLOCKED_METHODS = ("GET", "DELETE")
+    _BLOCKED_BODY = (
+        b'{"jsonrpc":"2.0","error":{"code":-32000,"message":'
+        b'"Method Not Allowed: stateless MCP server, POST only"},"id":null}'
+    )
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and scope.get("path") == "/api/mcp":
-            scope = dict(scope)
-            scope["path"] = "/api/mcp/"
-            if "raw_path" in scope:
-                scope["raw_path"] = b"/api/mcp/"
+        if scope["type"] == "http" and scope.get("path") in ("/api/mcp", "/api/mcp/"):
+            if scope.get("method") in self._BLOCKED_METHODS:
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 405,
+                        "headers": [
+                            (b"content-type", b"application/json"),
+                            (b"allow", b"POST"),
+                            (
+                                b"content-length",
+                                str(len(self._BLOCKED_BODY)).encode(),
+                            ),
+                        ],
+                    }
+                )
+                await send(
+                    {"type": "http.response.body", "body": self._BLOCKED_BODY}
+                )
+                return
+            if scope.get("path") == "/api/mcp":
+                scope = dict(scope)
+                scope["path"] = "/api/mcp/"
+                if "raw_path" in scope:
+                    scope["raw_path"] = b"/api/mcp/"
         await self.app(scope, receive, send)
 
 
