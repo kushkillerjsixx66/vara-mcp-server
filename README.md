@@ -55,7 +55,8 @@ vara-mcp-server/
 1. This repo is already structured for Vercel (`api/index.py` + `vercel.json`).
 2. Set environment variables in the Vercel project:
    - `VARA_PACKAGE_PATH` = `/var/task/vendor/vara`
-   - `VARA_DATA_ROOT`   = `/var/task/vendor/vara`
+   - `VARA_DATA_ROOT`   = `/tmp/vara` (writable runtime cache)
+   - `OPENAI_APPS_CHALLENGE` = the exact token shown by the OpenAI submission portal (required for domain verification)
 3. Deploy. Copy the production HTTPS URL.
 4. In **Grok → Connectors → New → Custom** paste:
 
@@ -87,7 +88,7 @@ vara-mcp-server/
 | `vara_get_veil_state` | Current hold + trajectories |
 | `vara_generate_fir` | Operator-Tier Field Intel Report markdown |
 
-See `docs/ARCHITECTURE.md` and `docs/DEPLOY.md` for full detail.
+See `docs/ARCHITECTURE.md` and `docs/DEPLOY.md` for full detail. The hosted privacy policy is available at [`/privacy`](https://vara-mcp-server.vercel.app/privacy) and documented in [`docs/PRIVACY.md`](docs/PRIVACY.md).
 
 [![M8ven Score](https://m8ven.ai/badge/mcp/kushkillerjsixx66/vara-mcp-server)](https://m8ven.ai/mcp/kushkillerjsixx66/vara-mcp-server)
 

@@ -6,12 +6,14 @@
 2. Set environment variables in the Vercel project:
    - `VARA_PACKAGE_PATH=/var/task/vendor/vara`  (read-only code + seed assets)
    - `VARA_DATA_ROOT=/tmp/vara`  (writable **hot cache** per instance)
+   - `OPENAI_APPS_CHALLENGE=<exact token from the OpenAI submission portal>` (optional until submitting to OpenAI; the endpoint returns 404 until configured)
    - `GITHUB_TOKEN` — fine-grained or classic token with `contents:write` on this repo
    - Optional:
      - `VARA_GITHUB_REPO=kushkillerjsixx66/vara-mcp-server`
      - `VARA_GITHUB_BRANCH=vara-archive` (default; **not** `main` — avoids redeploy loops)
      - `VARA_DURABLE_BACKEND=github` (default when token is present)
-3. Deploy → copy production URL → register in Grok Connectors as:
+3. The service publishes its privacy policy at `/privacy`. For OpenAI domain verification, copy the exact challenge token from the submission portal into `OPENAI_APPS_CHALLENGE`; the endpoint serves only that token as plain text at `/.well-known/openai-apps-challenge`.
+4. Deploy → copy production URL → register in Grok Connectors as:
    `https://<your-vercel-domain>/api/mcp`
 
 ### Why two storage layers?
