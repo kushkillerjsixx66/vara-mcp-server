@@ -119,6 +119,23 @@ DOMAIN_KEYWORDS = {
         "hacking group", "adversarial AI", "disinformation", "deepfake",
         "synthetic media", "underground market", "cybersecurity",
     ],
+    # Added 2026-11-06 (FIR-025 instrument fix, transplanted onto live
+    # main): adjacent_possible shipped with NO domain list, so its signals
+    # were density-scored on the caller keywords alone against planes
+    # carrying up to 159 extra terms — one global threshold then pruned
+    # the plane wholesale. (Live's scientific list already exists — added
+    # by 98d130c — so only this entry was missing.) List fitted to the
+    # plane's actual feeds (see RSS_SOURCES): LessWrong / EA Forum /
+    # Shtetl-Optimized frontier-discourse register.
+    "adjacent_possible": [
+        "AGI", "superintelligence", "forecasting", "prediction market",
+        "effective altruism", "rationality", "Bayesian", "decision theory",
+        "scaling laws", "recursive self-improvement", "longtermism",
+        "biosecurity", "AI governance", "red-teaming", "takeoff",
+        "frontier model", "compute governance", "intelligence explosion",
+        "epistemics", "world model", "agent foundations",
+        "crucial consideration",
+    ],
 }
 
 # ─── RSS SOURCES BY PLANE ────────────────────────────────────────────────────

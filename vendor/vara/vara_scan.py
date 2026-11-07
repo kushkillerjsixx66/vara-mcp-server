@@ -47,6 +47,11 @@ class VaraConfig:
     enable_dual_track: bool = True
     high_novelty_floor: float = 0.15
     weak_novelty_floor: float = 0.05
+    # Plane bind floor (2026-11-06 fix): per-plane guarantee — a plane that
+    # harvested coherent signals but placed none in either track gets its
+    # top-N coherent signals (by novelty) admitted via the weak track.
+    # 0 disables the guarantee.
+    plane_bind_floor: int = 5
     enable_multi_timescale: bool = True
     timescale_windows: list = field(default_factory=lambda: [6, 24, 72, 168])
     config_hash: str = ""
@@ -71,6 +76,7 @@ class VaraConfig:
                 "enable_dual_track": self.enable_dual_track,
                 "high_novelty_floor": self.high_novelty_floor,
                 "weak_novelty_floor": self.weak_novelty_floor,
+                "plane_bind_floor": self.plane_bind_floor,
                 "clustering_min_cluster_size": self.clustering_min_cluster_size,
                 "clustering_min_samples": self.clustering_min_samples,
                 "clustering_metric": self.clustering_metric,
@@ -101,6 +107,10 @@ class VaraScanReport:
     sentinel: Optional[dict] = None
     routing: Optional[dict] = None
     entity_filter: Optional[dict] = None
+    # Instrument provenance (2026-11-06): per-plane harvested/kept/bound/
+    # pruned counts + the effective keyword vocabulary in force, so a
+    # later cycle can pin the instrument before comparing scans.
+    instrument: Optional[dict] = None
     weak_signals: Optional[list] = None
     # Defect C: the FULL harvested set with per-signal provenance +
     # disposition — including blocked/pruned/deferred/veil-held signals,
@@ -319,6 +329,47 @@ def stage_dual_track(signals: list, config: VaraConfig) -> tuple:
         else:
             sig["track"] = "below_floor"
             below.append(sig)
+
+    # Plane bind floor (2026-11-06 fix, transplanted onto live main).
+    # Novelty is an absolute keyword density scored against vocabularies
+    # whose size varies widely by plane (tech's domain list is the
+    # 159-term DEFAULT_KEYWORDS; the other planes carry 11–25 domain
+    # terms each). A single global floor therefore prunes whole planes
+    # whose score distribution sits lower — FIR-025: bound 135, all tech,
+    # six planes at zero. Guarantee: a plane that harvested coherent
+    # signals but placed NONE in either track gets its
+    # top-`plane_bind_floor` coherent signals (novelty > 0, non-empty
+    # title or content) admitted through the weak track, stamped
+    # `plane_bind_floor` so the Sentinel honours the guarantee at G1/G2.
+    # Planes with any tracked signal are untouched, so scans whose planes
+    # all place normally — including tech-only scans — behave as before.
+    floor_n = max(0, int(getattr(config, "plane_bind_floor", 0) or 0))
+    if floor_n and below:
+        tracked_planes = {
+            sig.get("plane") for sig in high + weak if isinstance(sig, dict)
+        }
+        by_plane: dict = {}
+        for sig in below:
+            by_plane.setdefault(sig.get("plane"), []).append(sig)
+        rescued_ids: set = set()
+        for plane, sigs in by_plane.items():
+            if plane in tracked_planes:
+                continue
+            coherent = [
+                s for s in sigs
+                if float(s.get("novelty_score", 0)) > 0
+                and ((s.get("title") or "").strip() or (s.get("content") or "").strip())
+            ]
+            coherent.sort(
+                key=lambda s: float(s.get("novelty_score", 0)), reverse=True
+            )
+            for sig in coherent[:floor_n]:
+                sig["track"] = "weak"
+                sig["plane_bind_floor"] = True
+                rescued_ids.add(id(sig))
+                weak.append(sig)
+        if rescued_ids:
+            below = [s for s in below if id(s) not in rescued_ids]
     return high, weak, below
 
 
@@ -380,6 +431,114 @@ def stage_cluster(signals: list, config: VaraConfig) -> tuple:
         return signals, []
 
 
+def _empty_plane_entry() -> dict:
+    return {
+        "harvested": 0, "kept": 0, "bound": 0,
+        "pruned": 0, "blocked": 0, "veil_held": 0,
+        "plane_bind_floor": 0,
+    }
+
+
+def _build_instrument(
+    all_harvested: list,
+    config: VaraConfig,
+    entity_filter_stats: Optional[dict] = None,
+    pre_filter_plane_counts: Optional[dict] = None,
+) -> dict:
+    """Per-plane flow counts + effective keyword vocabulary for one scan.
+
+    Counts are derived from the disposition-stamped harvested set:
+    ``harvested`` = signals the plane produced that reached the track
+    split; ``kept`` = signals that entered a track (high or weak —
+    including any admitted by the plane bind floor); ``bound`` =
+    disposition vault_bound or promoted; ``pruned`` / ``blocked`` /
+    ``veil_held`` by disposition.
+
+    Live-pipeline stage mapping (transplant note): live main runs the
+    strict entity-filter stage (98d130c) BETWEEN harvest and the track
+    split, and signals it drops never enter the disposition-stamped set.
+    So here ``harvested`` counts the post-filter set the rest of the
+    pipeline sees, and — when the stage ran — each plane also carries
+    ``entity_dropped`` (pre-filter plane count minus ``harvested``), so
+    true intake per plane = harvested + entity_dropped. The stage's own
+    global stats are echoed verbatim under ``entity_filter``. ``kept``
+    counts only signals with an actual high/weak track: unlike the
+    snapshot pipeline, an untracked signal here means entity-dropped,
+    not kept.
+
+    The vocabulary block mirrors the harvester scoring exactly: each
+    signal's density is computed over caller keywords + the plane's
+    DOMAIN_KEYWORDS entry (falling back to the caller set when the plane
+    has no entry; the caller set itself falls back to DEFAULT_KEYWORDS
+    when empty). ``effective_vocabulary_hash`` is the SHA-256 of the
+    sorted, lowercased union of every term in force across the scan's
+    active planes, newline-joined — a later cycle can compare hashes
+    before comparing results.
+    """
+    planes: dict = {}
+    for sig in all_harvested:
+        if not isinstance(sig, dict):
+            continue
+        plane = sig.get("plane") or "unknown"
+        entry = planes.setdefault(plane, _empty_plane_entry())
+        entry["harvested"] += 1
+        if sig.get("track") in ("high", "weak"):
+            entry["kept"] += 1
+        if sig.get("plane_bind_floor"):
+            entry["plane_bind_floor"] += 1
+        disp = sig.get("disposition", "harvested")
+        if disp in ("vault_bound", "promoted"):
+            entry["bound"] += 1
+        elif disp == "pruned":
+            entry["pruned"] += 1
+        elif disp == "blocked":
+            entry["blocked"] += 1
+        elif disp == "veil_held":
+            entry["veil_held"] += 1
+
+    if pre_filter_plane_counts:
+        for plane, pre_count in pre_filter_plane_counts.items():
+            entry = planes.setdefault(plane, _empty_plane_entry())
+            entry["entity_dropped"] = pre_count - entry["harvested"]
+
+    vocabulary: dict = {}
+    try:
+        from vara_harvesters import DEFAULT_KEYWORDS, DOMAIN_KEYWORDS
+
+        caller = list(config.keywords or [])
+        caller_set = {str(k).lower() for k in caller} or {
+            str(k).lower() for k in DEFAULT_KEYWORDS
+        }
+        combined: set = set()
+        per_plane_effective: dict = {}
+        domain_counts: dict = {}
+        for plane in config.active_planes or []:
+            domain = DOMAIN_KEYWORDS.get(plane)
+            domain_counts[plane] = len(domain) if domain else 0
+            effective = caller_set | {
+                str(k).lower() for k in (domain or [])
+            }
+            per_plane_effective[plane] = len(effective)
+            combined |= effective
+        vocabulary = {
+            "caller_keywords": len(caller),
+            "default_keywords": len(DEFAULT_KEYWORDS),
+            "domain_keywords": domain_counts,
+            "per_plane_effective": per_plane_effective,
+            "effective_vocabulary_size": len(combined),
+            "effective_vocabulary_hash": hashlib.sha256(
+                "\n".join(sorted(combined)).encode()
+            ).hexdigest(),
+        }
+    except Exception as exc:  # provenance must never fail the scan
+        logger.warning("instrument vocabulary unavailable: %s", exc)
+
+    instrument = {"planes": planes, "vocabulary": vocabulary}
+    if entity_filter_stats:
+        instrument["entity_filter"] = entity_filter_stats
+    return instrument
+
+
 def run_vara_scan(config: VaraConfig) -> VaraScanReport:
     scan_id = str(uuid.uuid4())
     timestamp = datetime.datetime.utcnow().isoformat()
@@ -421,8 +580,17 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
     normalized = stage_enrich_entities(normalized)
 
     entity_filter_stats = None
+    pre_filter_plane_counts = None
     if config.target_entities:
         pre_filter_count = len(normalized)
+        # Per-plane pre-filter counts: the entity stage's dropped signals
+        # never enter the disposition-stamped set, so the instrument
+        # needs these to report per-plane entity_dropped honestly.
+        pre_filter_plane_counts = {}
+        for _sig in normalized:
+            if isinstance(_sig, dict):
+                _p = _sig.get("plane") or "unknown"
+                pre_filter_plane_counts[_p] = pre_filter_plane_counts.get(_p, 0) + 1
         normalized, entity_filter_stats = stage_entity_filter(
             normalized, config.target_entities
         )
@@ -441,6 +609,9 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
                     "entity_filter": entity_filter_stats,
                 },
                 entity_filter=entity_filter_stats,
+                instrument=_build_instrument(
+                    [], config, entity_filter_stats, pre_filter_plane_counts
+                ),
                 all_signals=[],
             )
 
@@ -515,6 +686,15 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
             d = sig.get("disposition", "harvested")
             disposition_counts[d] = disposition_counts.get(d, 0) + 1
 
+    # Instrument provenance (2026-11-06, Fault 3): per-plane flow counts
+    # and the effective keyword vocabulary in force for this scan. Before
+    # this, the report carried only global routing counts, so a whole
+    # plane binding zero was invisible in the payload and cross-cycle
+    # comparisons could not pin which vocabulary scored the harvest.
+    instrument = _build_instrument(
+        all_harvested, config, entity_filter_stats, pre_filter_plane_counts
+    )
+
     report = VaraScanReport(
         scan_id=scan_id,
         scan_label=config.scan_label,
@@ -536,6 +716,7 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
             **({"entity_filter": entity_filter_stats} if entity_filter_stats else {}),
         },
         entity_filter=entity_filter_stats,
+        instrument=instrument,
         weak_signals=weak_out if config.enable_dual_track else None,
         all_signals=all_harvested,
     )

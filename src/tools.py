@@ -109,6 +109,7 @@ def vara_run_scan(arguments: dict) -> dict:
     }
     for key in (
         "enable_dual_track", "high_novelty_floor", "weak_novelty_floor",
+        "plane_bind_floor",
         "enable_multi_timescale", "use_firecrawl",
         "extra_rss_feeds", "extra_substacks",
     ):

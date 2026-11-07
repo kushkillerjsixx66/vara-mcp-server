@@ -67,6 +67,13 @@ def gate_g1(signal: dict, weak_track: bool = False) -> GateResult:
 
     if not content and not title:
         return GateResult("G1", GateVerdict.BLOCK, "empty content and title", sid, 0.0)
+    if signal.get("plane_bind_floor"):
+        # Plane bind floor guarantee (2026-11-06): this signal is one of
+        # its plane's top coherent signals, admitted by stage_dual_track
+        # because the plane placed nothing through the absolute floors.
+        # The empty-content BLOCK above still applies; the novelty floor
+        # does not — applying it would void the guarantee.
+        return GateResult("G1", GateVerdict.PASS, f"plane bind floor (novelty {novelty:.3f} below {threshold})", sid, novelty)
     if novelty < threshold:
         return GateResult("G1", GateVerdict.BLOCK, f"novelty {novelty:.3f} below {threshold}", sid, novelty)
     return GateResult("G1", GateVerdict.PASS, f"novelty {novelty:.3f} >= {threshold}", sid, novelty)
@@ -74,6 +81,12 @@ def gate_g1(signal: dict, weak_track: bool = False) -> GateResult:
 
 def gate_g2(signal: dict, current_count: int, budget: int = G2_ATTENTION_BUDGET) -> GateResult:
     sid = signal.get("signal_id", signal.get("source_id", "unknown"))
+    if signal.get("plane_bind_floor"):
+        # Plane bind floor guarantee (2026-11-06): bounded by the
+        # operator-set floor (top-N per otherwise-unplaced plane), so it
+        # cannot exhaust the budget itself; PRUNE/DEFER here would void
+        # the guarantee based on other planes' volume.
+        return GateResult("G2", GateVerdict.PASS, "plane bind floor guarantee", sid)
     if current_count >= budget:
         return GateResult("G2", GateVerdict.PRUNE, f"budget exhausted ({current_count}/{budget})", sid)
     if current_count >= int(budget * 0.90):
