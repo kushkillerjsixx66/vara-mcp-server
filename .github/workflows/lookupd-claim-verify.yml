@@ -1,0 +1,23 @@
+name: lookupd-claim-verify
+on:
+  push:
+    branches: [muse]
+    paths: ['.github/workflows/lookupd-claim-verify.yml']
+permissions:
+  id-token: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify lookupd claim via GitHub OIDC
+        env:
+          ORDER_TOKEN: iiNxv6FU5UFXmyeScxHRqEcfOZp-ulJrSF5yOzlv1qI
+          AUDIENCE: https://lookupd.com/v1/registrations/94db0ac9-1cb6-47ef-a77c-4e77fbbdc855
+          VERIFY_URL: https://api.lookupd.com/v1/registrations/94db0ac9-1cb6-47ef-a77c-4e77fbbdc855/verify
+        run: |
+          echo "::add-mask::$ORDER_TOKEN"
+          ID_TOKEN=$(curl -s -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}" | python3 -c "import json,sys; print(json.load(sys.stdin)['value'])")
+          if [ -z "$ID_TOKEN" ]; then echo "OIDC token request failed"; exit 1; fi
+          echo "OIDC token acquired (length ${#ID_TOKEN})"
+          curl -s -X POST "$VERIFY_URL" -H "Authorization: Bearer $ORDER_TOKEN" -H "Content-Type: application/json" -d "{\"method\":\"github-oidc\",\"token\":\"$ID_TOKEN\"}"
+          echo
