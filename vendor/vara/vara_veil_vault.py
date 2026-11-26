@@ -52,6 +52,10 @@ class VeilEntry:
     consecutive_scans: int = 1
     missed_scans:     int  = 0
     status:           str  = "HELD"   # HELD | PROMOTED | EXPIRED
+    # Ordered sighting lineage: one record per distinct scan that observed
+    # this signal ({scan_id, timestamp, event}), so a promotion can be
+    # replayed from the record instead of inferred from counters.
+    observations:     list = field(default_factory=list)
 
 
 @dataclass
@@ -106,6 +110,7 @@ def load_veil_hold() -> dict:
             # Older holds predate missed_scans. Default it during migration
             # rather than invalidating the entire persisted hold file.
             value.setdefault("missed_scans", 0)
+            value.setdefault("observations", [])
             value.setdefault("consecutive_scans", 1 if value.get("recurrence_count", 1) else 0)
             entry = VeilEntry(**value)
             # Legacy holds predate signal_id. Reconstruct a lexical signal
@@ -150,12 +155,22 @@ def run_veil(deferred_signals: list, scan_id: str) -> VeilReport:
 
     # Track total recurrence, consecutive recurrence, and absence separately.
     # Promotion requires consecutive evidence, not merely cumulative sightings.
-    current_ids = {
-        s.get("signal_id") or _compute_signal_id(
+    #
+    # Recurrence is denominated in SCANS, not in list occurrences. The
+    # deferred list is first deduplicated by signal identity: in dual-track
+    # operation the same source can be presented by both tracks (or by two
+    # harvesters) inside a single cycle, and each presentation was
+    # previously counted as a fresh recurrence — two sightings under one
+    # scan_id could satisfy a threshold written for two scans. A sighting
+    # only counts when its scan_id differs from the entry's last_seen_scan.
+    deduped: dict = {}
+    for s in deferred_signals:
+        sid = s.get("signal_id") or _compute_signal_id(
             s.get("plane", ""), s.get("title", ""), s.get("content", "")
         )
-        for s in deferred_signals
-    }
+        if sid not in deduped:
+            deduped[sid] = s
+    current_ids = set(deduped)
     for sid, entry in list(hold.items()):
         if sid not in current_ids and entry.status == "HELD":
             entry.missed_scans += 1
@@ -164,23 +179,36 @@ def run_veil(deferred_signals: list, scan_id: str) -> VeilReport:
                 entry.status = "EXPIRED"
                 expired += 1
 
-    # Process incoming deferred signals
-    for sig in deferred_signals:
-        sid = sig.get("signal_id") or _compute_signal_id(
-            sig.get("plane", ""), sig.get("title", ""), sig.get("content", "")
-        )
-
+    # Process incoming deferred signals (one per signal identity per scan)
+    for sid, sig in deduped.items():
         if sid in hold:
             entry = hold[sid]
-            entry.recurrence_count += 1
-            entry.consecutive_scans += 1
-            entry.missed_scans      = 0
-            entry.last_seen_scan    = scan_id
-            entry.signal            = sig   # refresh with latest version
+            if entry.status == "HELD" and scan_id != entry.last_seen_scan:
+                entry.recurrence_count += 1
+                entry.consecutive_scans += 1
+                entry.missed_scans      = 0
+                entry.last_seen_scan    = scan_id
+                entry.signal            = sig   # refresh with latest version
+                entry.observations.append({
+                    "scan_id": scan_id,
+                    "timestamp": timestamp,
+                    "event": "sighting",
+                })
 
-            if entry.consecutive_scans >= VEIL_RECURRENCE_THRESHOLD:
-                entry.status = "PROMOTED"
-                promoted.append(sig)
+                if entry.consecutive_scans >= VEIL_RECURRENCE_THRESHOLD:
+                    entry.status = "PROMOTED"
+                    entry.observations.append({
+                        "scan_id": scan_id,
+                        "timestamp": timestamp,
+                        "event": "promoted",
+                    })
+                    # Carry the ordered lineage onto the promoted signal so
+                    # the Vault commit records why it crossed, not just that
+                    # it crossed.
+                    sig["veil_observations"] = list(entry.observations)
+                    sig["veil_first_seen_scan"] = entry.first_seen_scan
+                    sig["veil_last_seen_scan"] = entry.last_seen_scan
+                    promoted.append(sig)
         else:
             hold[sid] = VeilEntry(
                 source_id=sig.get("source_id", ""),
@@ -193,6 +221,11 @@ def run_veil(deferred_signals: list, scan_id: str) -> VeilReport:
                 consecutive_scans=1,
                 missed_scans=0,
                 status="HELD",
+                observations=[{
+                    "scan_id": scan_id,
+                    "timestamp": timestamp,
+                    "event": "held",
+                }],
             )
 
     # Promoted entries have crossed the Veil boundary and no longer belong
