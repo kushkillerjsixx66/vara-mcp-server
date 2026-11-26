@@ -33,6 +33,28 @@ _TRANSPORT_SECURITY = TransportSecuritySettings(
 
 mcp = FastMCP(
     "vara-mcp",
+    instructions=(
+        "Vara is a weak-signal scanner for AI agents. It searches public "
+        "sources across topic areas called planes (social, scientific, tech, "
+        "economic, geopolitical, adjacent_possible, dark, persons) for early, "
+        "low-volume signals — papers, posts, releases, and reports that may "
+        "matter before they are widely noticed. Every signal comes with "
+        "provenance: its source, when it was retrieved, and a novelty score.\n\n"
+        "How to use it: call vara_run_scan with keywords (optionally "
+        "target_entities, specific planes, or a wider sweep_depth_hours) to "
+        "run a live scan; it returns a report with a scan_id. Follow up with "
+        "vara_get_scan to re-read a report, vara_query_signals to search "
+        "signals across scans, and vara_generate_fir to turn a scan into a "
+        "readable Field Intel Report. Signals too weak to pass when first "
+        "seen are not thrown away — they are held in the Veil, a watch list "
+        "tracked over time; vara_get_veil_state shows what is being held. "
+        "Held signals are unverified by definition.\n\n"
+        "Practical notes: vara_run_scan performs live network work and can "
+        "take a while; all other tools are fast reads. Scan history lives in "
+        "an archive local to the running server instance, so older scans may "
+        "be unavailable — keep the scan_id and any report you need. No "
+        "account or API key is required."
+    ),
     stateless_http=True,
     json_response=True,
     streamable_http_path="/",
@@ -47,8 +69,13 @@ def _call(name: str, arguments: dict[str, Any]) -> Any:
 @mcp.tool(
     title="Run Vara scan",
     description=(
-        "Execute a full Real Vara scan using the operational dual-track, "
-        "multi-timescale pipeline. This tool changes Vara runtime state."
+        "Run a live scan of public sources for weak signals on a topic. "
+        "Searches the selected planes (source categories) over the last "
+        "sweep_depth_hours for the given keywords and target entities, scores "
+        "what it finds for novelty, and returns a scan report whose signals "
+        "each carry their source and retrieval time, plus a scan_id for "
+        "follow-up calls. The only tool that changes state; it makes live "
+        "network requests and can take a while."
     ),
     annotations=ToolAnnotations(
         read_only_hint=False,
@@ -108,7 +135,11 @@ def vara_run_scan(
 
 @mcp.tool(
     title="List Vara scans",
-    description="List historical Vara scan metadata from the local archive.",
+    description=(
+        "List previous scans, newest first (metadata only). History is kept "
+        "in an archive local to the running server instance, so older scans "
+        "may no longer be listed."
+    ),
     annotations=ToolAnnotations(
         read_only_hint=True,
         destructive_hint=False,
@@ -127,7 +158,10 @@ def vara_list_scans(
 
 @mcp.tool(
     title="Get Vara scan",
-    description="Retrieve a complete historical VaraScanReport by scan_id or short prefix.",
+    description=(
+        "Get the complete report of a previous scan by its scan_id (a unique "
+        "prefix works too), including the signals it found."
+    ),
     annotations=ToolAnnotations(
         read_only_hint=True,
         destructive_hint=False,
@@ -147,7 +181,12 @@ def vara_get_scan(
 
 @mcp.tool(
     title="Query Vara signals",
-    description="Query the committed Vault corpus and optionally the current Veil hold.",
+    description=(
+        "Search the signals collected by past scans. Filter by plane (source "
+        "category), minimum novelty score, entity, or date range. Set "
+        "include_veil_hold to also search signals that were held back as too "
+        "weak (see vara_get_veil_state)."
+    ),
     annotations=ToolAnnotations(
         read_only_hint=True,
         destructive_hint=False,
@@ -182,7 +221,12 @@ def vara_query_signals(
 
 @mcp.tool(
     title="Get Veil state",
-    description="Inspect current Veil hold entries and trajectories.",
+    description=(
+        "Show the Veil: signals Vara judged too weak to pass when first seen, "
+        "kept on a watch list and re-checked over time. Trajectories show "
+        "whether a held signal is strengthening or fading. Held signals are "
+        "unverified — being in the Veil is not a result."
+    ),
     annotations=ToolAnnotations(
         read_only_hint=True,
         destructive_hint=False,
@@ -205,7 +249,12 @@ def vara_get_veil_state(
 
 @mcp.tool(
     title="Generate FIR",
-    description="Generate an Operator-Tier or lightweight Field Intel Report from a scan_id.",
+    description=(
+        "Turn a scan into a Field Intel Report: a readable intelligence "
+        "brief built from the scan's signals, with provenance attached. "
+        "format 'operator_tier' is the full report; 'lightweight' is a "
+        "short brief."
+    ),
     annotations=ToolAnnotations(
         read_only_hint=True,
         destructive_hint=False,
@@ -417,7 +466,10 @@ def scan_lineage_resource(scan_id: str) -> str:
 @mcp.resource(
     "vara://veil/state",
     name="vara-veil-state",
-    description="Current Veil hold: held entries and trajectories.",
+    description=(
+        "The Veil watch list: signals held back as too weak when first seen, "
+        "with their trajectories over time. See the vara_get_veil_state tool."
+    ),
     mime_type="application/json",
 )
 def veil_state_resource() -> str:
@@ -520,7 +572,10 @@ class _NormalizeMcpPath:
 
 app = FastAPI(
     title="Vara MCP Server",
-    description="Machine-callable Real Vara sensory architecture",
+    description=(
+        "Vara MCP Server — governed weak-signal scanning for AI agents: "
+        "live scans of public sources, per-signal provenance, Field Intel Reports."
+    ),
     version="1.1.0",
     lifespan=lifespan,
     redirect_slashes=False,
