@@ -1,0 +1,14 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.kushkillerjsixx66/vara-mcp-server",
+  "description": "Governed weak-signal scanning for AI agents: multi-plane harvest, per-signal lineage, intel reports.",
+  "title": "Vara MCP — Field Intelligence Scan Server",
+  "version": "1.30.0",
+  "websiteUrl": "https://liminaljermo.substack.com",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://vara-mcp-server.vercel.app/api/mcp"
+    }
+  ]
+}

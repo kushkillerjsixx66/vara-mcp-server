@@ -2,9 +2,30 @@
 
 <a href="https://lounge.ai/@liminaljermo"><img src="https://lounge.ai/api/badge/liminaljermo" alt="Jeremy Sebastian on Lounge" height="28"></a>
 
-Machine-callable surface for the **Real Vara** sensory architecture (dual-track, multi-timescale, Sentinel-gated, Veil/Vault-mediated).
+Vara is a **weak-signal scanner** that any MCP-compatible AI client can call. It searches public sources — papers, posts, releases, feeds — for early, low-volume signals on topics you choose, scores them for novelty, and returns every signal with its provenance: where it came from, when it was retrieved, and how it was judged. Signals too weak to trust yet are not discarded; they are held in a watch list (the Veil) and re-checked as they develop. Vara can also turn a scan into a **Field Intel Report**: a readable brief with its evidence attached.
 
-This package wraps the operational Vara pipeline so it can be registered as a custom MCP connector in Grok (or any MCP-compatible client). It exposes both **live scanning** and **access to previously gathered signals**, enabling continuous Field Intel Report production.
+## Use it
+
+Vara is hosted — there is nothing to install, and no account or API key is needed. Point any MCP client at:
+
+```
+https://vara-mcp-server.vercel.app/api/mcp
+```
+
+Claude Code:
+
+```
+claude mcp add --transport http vara-mcp-server https://vara-mcp-server.vercel.app/api/mcp
+```
+
+The working flow:
+
+1. **Scan** — `vara_run_scan` with keywords for your topic (optionally `target_entities`, specific `active_planes`, or a wider `sweep_depth_hours`). It searches live sources and returns a report with a `scan_id`.
+2. **Read** — `vara_get_scan` re-reads a report; `vara_query_signals` searches the signals from past scans by category, novelty, entity, or date.
+3. **Report** — `vara_generate_fir` turns a scan into a Field Intel Report.
+4. **Watch** — signals too weak to pass are held in the Veil instead of discarded. `vara_get_veil_state` shows the watch list and whether held signals are strengthening or fading.
+
+Two honest limits: a scan does live network work and can take a while (on this free-tier host it can occasionally time out — retrying is safe), and scan history is archived on the running instance, so older scans may not always be reachable. Keep the `scan_id` of anything you care about.
 
 ## The Lattice
 
@@ -80,12 +101,12 @@ vara-mcp-server/
 
 | Tool | Description |
 |------|-------------|
-| `vara_run_scan` | Full dual-track / multi-timescale Real Vara scan |
-| `vara_list_scans` | Historical scan inventory |
-| `vara_get_scan` | Full past report by ID |
-| `vara_query_signals` | Filtered Vault (+ optional Veil) query |
-| `vara_get_veil_state` | Current hold + trajectories |
-| `vara_generate_fir` | Operator-Tier Field Intel Report markdown |
+| `vara_run_scan` | Run a live scan for weak signals on a topic; returns a report + `scan_id` |
+| `vara_list_scans` | List previous scans (instance-local archive) |
+| `vara_get_scan` | Full report of a past scan by `scan_id` |
+| `vara_query_signals` | Search signals across scans, with filters |
+| `vara_get_veil_state` | The Veil watch list: held, too-weak signals and their trajectories |
+| `vara_generate_fir` | Turn a scan into a readable Field Intel Report |
 
 See `docs/ARCHITECTURE.md` and `docs/DEPLOY.md` for full detail.
 
