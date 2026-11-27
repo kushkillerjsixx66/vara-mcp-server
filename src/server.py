@@ -294,8 +294,10 @@ def vara_get_veil_state(
     description=(
         "Turn a scan into a Field Intel Report: a readable intelligence "
         "brief built from the scan's signals, with provenance attached. "
-        "format 'operator_tier' is the full report; 'lightweight' is a "
-        "short brief."
+        "format 'operator_tier' is the full report (keyed callers); "
+        "'free' is the FFIR — a Free Field Intel Report, observed signals "
+        "only, which is what anonymous callers receive; 'lightweight' is "
+        "a short brief."
     ),
     annotations=ToolAnnotations(
         read_only_hint=True,
@@ -308,7 +310,7 @@ def vara_generate_fir(
     scan_id: str,
     series: str | None = None,
     baseline: str | None = None,
-    format: Literal["operator_tier", "lightweight"] = "operator_tier",
+    format: Literal["operator_tier", "lightweight", "free"] = "operator_tier",
     next_cycle_hint: str | None = None,
 ) -> Any:
     arguments = {
