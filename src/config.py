@@ -5,9 +5,22 @@ import os
 import shutil
 from pathlib import Path
 
-VARA_PACKAGE_PATH = Path(
-    os.environ.get("VARA_PACKAGE_PATH", "/var/task/vendor/vara")
-).resolve()
+def _default_package_path() -> Path:
+    explicit = os.environ.get("VARA_PACKAGE_PATH")
+    if explicit:
+        return Path(explicit).resolve()
+    # Vercel / AWS Lambda deployment root, when that is where we are running.
+    vercel = Path("/var/task/vendor/vara")
+    if vercel.is_dir():
+        return vercel.resolve()
+    # Anywhere else (local dev, containers, other hosts, graders): the
+    # repo-relative vendor tree — this file is <repo>/src/config.py.
+    # Without this fallback the server started fine off-Vercel but every
+    # scan failed at import time (audit 2026-11-27, finding M1).
+    return (Path(__file__).resolve().parent.parent / "vendor" / "vara").resolve()
+
+
+VARA_PACKAGE_PATH = _default_package_path()
 
 
 def _default_data_root() -> Path:

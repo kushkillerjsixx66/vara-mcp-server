@@ -203,7 +203,12 @@ def _blob_put_text(path: str, content: str) -> bool:
         "x-allow-overwrite": "1",
         "Content-Type": "application/json",
     }
-    access = (os.environ.get("VARA_BLOB_ACCESS") or "").strip().lower()
+    # Private by default (audit 2026-11-27, finding M7): scan reports are
+    # the product's evidence archive and blob pathnames are deterministic,
+    # so an unset access mode must not leave the archive world-readable at
+    # predictable URLs. Public requires an explicit operator choice via
+    # VARA_BLOB_ACCESS=public.
+    access = (os.environ.get("VARA_BLOB_ACCESS") or "private").strip().lower()
     if access in ("public", "private"):
         headers["x-vercel-blob-access"] = access
     try:
@@ -360,9 +365,81 @@ def persist_scan_report(report: dict, local_path: Optional[Path] = None) -> dict
     index.insert(0, meta)
     index = index[:500]
     index_ok = save_index(index)
+    # Verify-and-repair (audit 2026-11-27, finding M6): the index update is
+    # a read-modify-write against a shared store with no locking, so a
+    # concurrent instance's save can clobber this entry between our read
+    # and our write. Re-read once; if our scan_id was clobbered, re-merge
+    # it into the winner's index and save again. Bounded to one repair —
+    # beyond that, the scan file itself is durable and only its index
+    # entry is at risk.
+    if index_ok:
+        current = load_index()
+        if not any(e.get("scan_id") == meta["scan_id"] for e in current):
+            merged = [e for e in current if e.get("scan_id") != meta["scan_id"]]
+            merged.insert(0, meta)
+            index_ok = save_index(merged[:500])
     status["persisted"] = True
     status["index_updated"] = index_ok
     return status
+
+
+def _merge_state_text(name: str, local_text: str) -> str:
+    """Union-merge local state with the durable copy before persisting.
+
+    Audit 2026-11-27, finding M6: persist_state_files used to overwrite the
+    durable copy with local state unconditionally, so on a multi-instance
+    deployment the last writer silently erased other instances' Veil/Vault
+    updates. The merge preserves durable-only entries and lets local win
+    per identity (the local copy holds this instance's newest writes):
+
+    - dict-shaped state (veil_hold by source_id, veil_trajectories by
+      trajectory key): key union, local wins per key.
+    - list-shaped state (vault_signals by vault_id, drift log by
+      scan/source/plane): identity union, local wins per identity;
+      entries without a recognizable identity are kept unless an identical
+      entry is already present.
+    - anything unparseable or shape-mismatched: local wins outright
+      (the pre-fix behavior), so a corrupt durable copy never blocks a
+      persist.
+    """
+    remote_text = _store_get_text(_state_path(name))
+    if not remote_text:
+        return local_text
+    try:
+        local = json.loads(local_text)
+        remote = json.loads(remote_text)
+    except Exception:
+        return local_text
+    if isinstance(local, dict) and isinstance(remote, dict):
+        merged = dict(remote)
+        merged.update(local)
+        return json.dumps(merged, indent=2, default=str)
+    if isinstance(local, list) and isinstance(remote, list):
+        def _identity(item):
+            if not isinstance(item, dict):
+                return None
+            if item.get("vault_id"):
+                return ("vault_id", item["vault_id"])
+            if item.get("scan_id") and item.get("source_id"):
+                return ("drift", item["scan_id"], item["source_id"], item.get("plane"))
+            if item.get("signal_id"):
+                return ("signal_id", item["signal_id"])
+            return None
+
+        merged_by_id: dict = {}
+        order: list = []
+        for item in remote + local:
+            ident = _identity(item)
+            if ident is None:
+                if item not in order:
+                    order.append(item)
+                continue
+            if ident not in merged_by_id:
+                order.append(ident)
+            merged_by_id[ident] = item  # local comes last: local wins
+        out = [merged_by_id[o] if isinstance(o, tuple) else o for o in order]
+        return json.dumps(out, indent=2, default=str)
+    return local_text
 
 
 def persist_state_files() -> dict:
@@ -385,6 +462,7 @@ def persist_state_files() -> dict:
         except OSError as e:
             status["files"][name] = f"read_error:{type(e).__name__}"
             continue
+        text = _merge_state_text(name, text)
         ok = _store_put_text(_state_path(name), text, f"archive: state {name}")
         status["files"][name] = "ok" if ok else "failed"
     return status
@@ -394,7 +472,16 @@ def hydrate_from_durable() -> dict:
     result: dict = {"backend": _backend(), "hydrated_scans": 0, "hydrated_state": 0}
     if not enabled():
         return result
-    config.ensure_writable_data_root()
+    # Durable state BEFORE package seeding (audit 2026-11-27): the seeding
+    # step inside ensure_writable_data_root() fills missing state files
+    # from the package tree, so seeding first shadows the durable copies —
+    # a fresh data root would boot from the stale package seed instead of
+    # the archive. Fetch durable state first; seeding then fills only
+    # what the archive does not have. (Previously invisible because the
+    # default package path pointed at /var/task, which exists only on
+    # Vercel; the repo-relative fallback made the shadowing real.)
+    config.VARA_DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for name in ("vault_signals.json", "veil_hold.json", "veil_trajectories.json", "vara_drift_log.json"):
         dest = config.VARA_DATA_ROOT / name
         if dest.exists():
@@ -407,6 +494,7 @@ def hydrate_from_durable() -> dict:
             result["hydrated_state"] += 1
         except OSError:
             pass
+    config.ensure_writable_data_root()
     for entry in load_index():
         filename = entry.get("file") or ""
         if not filename:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
+
+from pydantic import Field
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +34,16 @@ except ImportError:
 
 # DNS-rebinding protection is kept enabled. The public Vercel hostname must be
 # explicitly allowed; an empty allowed_hosts list rejects every external Host.
+# Host validation is the rebinding defense and stays narrow. Origins are a
+# separate question: this server is unauthenticated and carries no ambient
+# credentials (no cookies, no sessions to ride), so Origin checks protect
+# nothing here — but leaving allowed_origins empty made the SDK reject EVERY
+# browser-context client (web playgrounds, inspectors) with 403 while the
+# CORS layer advertised "*". The list below names the real browser surfaces
+# (Glama's playground/gateway, this deployment's own origin, local dev and
+# inspector origins) and is deliberately extensible: add an origin when a
+# new browser client appears. Native MCP clients send no Origin and were
+# never affected.
 _TRANSPORT_SECURITY = TransportSecuritySettings(
     enable_dns_rebinding_protection=True,
     allowed_hosts=[
@@ -41,6 +53,15 @@ _TRANSPORT_SECURITY = TransportSecuritySettings(
         "127.0.0.1:*",
         "vara-mcp-server.vercel.app",
         "vara-mcp-server.vercel.app:*",
+    ],
+    allowed_origins=[
+        "https://glama.ai",
+        "https://www.glama.ai",
+        "https://vara-mcp-server.vercel.app",
+        "http://localhost:*",
+        "https://localhost:*",
+        "http://127.0.0.1:*",
+        "https://127.0.0.1:*",
     ],
 )
 
@@ -98,7 +119,7 @@ def _call(name: str, arguments: dict[str, Any]) -> Any:
     ),
 )
 def vara_run_scan(
-    keywords: list[str] | None = None,
+    keywords: Annotated[list[str], Field(max_length=100)] | None = None,
     active_planes: list[
         Literal[
             "social",
@@ -113,17 +134,17 @@ def vara_run_scan(
         ]
     ]
     | None = None,
-    sweep_depth_hours: int = 24,
-    scan_label: str | None = None,
+    sweep_depth_hours: Annotated[int, Field(ge=1, le=720)] = 24,
+    scan_label: Annotated[str, Field(max_length=200)] | None = None,
     enable_dual_track: bool = True,
-    high_novelty_floor: float = 0.15,
-    weak_novelty_floor: float = 0.05,
+    high_novelty_floor: Annotated[float, Field(ge=0.0, le=1.0)] = 0.15,
+    weak_novelty_floor: Annotated[float, Field(ge=0.0, le=1.0)] = 0.05,
     enable_multi_timescale: bool = True,
     use_firecrawl: bool = False,
     generate_fir: bool = False,
-    extra_rss_feeds: list[str] | None = None,
-    extra_substacks: list[str] | None = None,
-    target_entities: list[str] | None = None,
+    extra_rss_feeds: Annotated[list[str], Field(max_length=50)] | None = None,
+    extra_substacks: Annotated[list[str], Field(max_length=50)] | None = None,
+    target_entities: Annotated[list[str], Field(max_length=50)] | None = None,
 ) -> Any:
     arguments = {
         "keywords": keywords,
@@ -161,7 +182,7 @@ def vara_run_scan(
     ),
 )
 def vara_list_scans(
-    limit: int = 20,
+    limit: Annotated[int, Field(ge=1, le=100)] = 20,
     since: str | None = None,
     label_contains: str | None = None,
 ) -> Any:
@@ -209,14 +230,14 @@ def vara_get_scan(
 )
 def vara_query_signals(
     plane: str | None = None,
-    min_novelty: float | None = None,
+    min_novelty: Annotated[float, Field(ge=0.0, le=1.0)] | None = None,
     entity: str | None = None,
     since: str | None = None,
     until: str | None = None,
     origin: Literal["passed", "veil_promoted", "any"] = "any",
     canonized_only: bool = False,
     include_veil_hold: bool = False,
-    limit: int = 50,
+    limit: Annotated[int, Field(ge=1, le=200)] = 50,
 ) -> Any:
     arguments = {
         "plane": plane,
@@ -498,8 +519,6 @@ async def health(request):
         "status": "ok",
         "service": "vara-mcp",
         "mcp_base": "/api/mcp",
-        "package_path": str(config.VARA_PACKAGE_PATH),
-        "data_root": str(config.VARA_DATA_ROOT),
         "durable": {"backend": _durable.backend_name(), "enabled": _durable.enabled()},
         "ssrf_guard": {"module": "src.ssrf_guard", "feed_allowlist_configured": bool(_ssrf.feed_host_allowlist())},
         "tools": [
