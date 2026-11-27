@@ -11,9 +11,11 @@ import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from . import budget as budget_mod
 from . import config
 from . import durable
 from . import lineage as lineage_mod
+from . import request_context
 from . import ssrf_guard
 from .canonical_vara import govern_operational_report
 from .canonical_veil import CanonicalVeilBoundaryAdapter
@@ -37,6 +39,55 @@ def _save_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
+
+
+def _budget_exhausted_payload(tier: str, decision: dict) -> dict:
+    """Graceful refusal when the day's scan budget is spent.
+
+    The refusal is itself a product surface: reads stay free, so the
+    payload carries the current Veil watch list and the most recent scan
+    — the caller leaves with intelligence, not a dead end — plus the
+    route to full-depth access.
+    """
+    veil_snapshot: dict = {}
+    try:
+        veil = vara_get_veil_state({"include_trajectories": False})
+        veil_snapshot = {
+            "held_count": veil.get("held_count"),
+            "held_entries": (veil.get("held_entries") or [])[:10],
+        }
+    except Exception:
+        veil_snapshot = {}
+    latest_scan = None
+    try:
+        listing = vara_list_scans({"limit": 1})
+        if listing.get("scans"):
+            latest_scan = listing["scans"][0]
+    except Exception:
+        latest_scan = None
+    return {
+        "error": (
+            f"Scan budget exhausted for the {tier} tier today "
+            f"({decision['used']}/{decision['limit']} used, "
+            f"{decision['scope']} limit; resets at the next UTC midnight). "
+            "Reads remain free and unlimited: vara_list_scans, vara_get_scan, "
+            "vara_query_signals, vara_get_veil_state. Full-depth scans "
+            "(168h sweep, all planes) run on an operator-issued API key — "
+            f"request one at {config.BUDGET_CONTACT}."
+        ),
+        "scan_budget": {
+            "tier": tier,
+            "exhausted": True,
+            "binding_scope": decision["scope"],
+            "used_today": decision["used"],
+            "daily_limit": decision["limit"],
+            "date": decision["date"],
+            "resets_at": f"{decision['date']}T24:00:00Z (next UTC midnight)",
+        },
+        "veil_state": veil_snapshot,
+        "latest_scan": latest_scan,
+        "published_reports": "https://liminaljermo.substack.com",
+    }
 
 
 # ─── TOOL: vara_run_scan ─────────────────────────────────────────────────────
@@ -134,6 +185,25 @@ def vara_run_scan(arguments: dict) -> dict:
         ]
         cfg_kwargs["target_entities"] = target_entities
 
+    # Scan budget (operator ruling 2026-11-27): the harvest is the one
+    # expensive operation, so it is the one gated operation. Tier caps are
+    # applied (and announced) here, after all caller input is validated —
+    # a request rejected above never consumes budget. See src/budget.py.
+    budget_ctx = None
+    budget_notices: list[str] = []
+    if config.SCAN_BUDGET_ENABLED:
+        resolved = budget_mod.resolve_tier(request_context.current_api_key())
+        caller_id = budget_mod.caller_id_for(request_context.current_caller_ip())
+        sweep, planes, budget_notices = budget_mod.apply_caps(
+            resolved["tier"], sweep, planes
+        )
+        cfg_kwargs["sweep_depth_hours"] = sweep
+        cfg_kwargs["active_planes"] = planes
+        decision = budget_mod.reserve(resolved["tier"], resolved["key_id"], caller_id)
+        if not decision["allowed"]:
+            return _budget_exhausted_payload(resolved["tier"], decision)
+        budget_ctx = {**resolved, "caller_id": caller_id}
+
     try:
         cfg = VaraConfig(**cfg_kwargs)
     except TypeError:
@@ -182,6 +252,15 @@ def vara_run_scan(arguments: dict) -> dict:
 
     try:
         report = run_vara_scan(cfg)
+    except Exception:
+        # The harvest never ran — the reservation is returned so a broken
+        # scan does not burn the caller's day. (A scan that runs and
+        # completes keeps its reservation even if its result is null.)
+        if budget_ctx is not None:
+            budget_mod.refund(
+                budget_ctx["tier"], budget_ctx["key_id"], budget_ctx["caller_id"]
+            )
+        raise
     finally:
         vs.OUTPUT_DIR = original_paths["output"]
         vvv.VAULT_PATH = original_paths["vault"]
@@ -230,6 +309,14 @@ def vara_run_scan(arguments: dict) -> dict:
                 "reason": "caller-supplied canonical lineage is required",
                 "authority": "canonical_veil",
             }
+
+    if budget_ctx is not None:
+        result["scan_budget"] = {
+            **budget_mod.status(
+                budget_ctx["tier"], budget_ctx["key_id"], budget_ctx["caller_id"]
+            ),
+            "notices": budget_notices,
+        }
 
     if arguments.get("generate_fir"):
         result["field_intel_report"] = _render_fir_from_report(result, arguments)
