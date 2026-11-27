@@ -6,7 +6,7 @@ Vara is a **weak-signal scanner** that any MCP-compatible AI client can call. It
 
 ## Use it
 
-Vara is hosted — there is nothing to install, and no account or API key is needed. Point any MCP client at:
+Vara is hosted — there is nothing to install, and no account or API key is needed to start. Point any MCP client at:
 
 ```
 https://vara-mcp-server.vercel.app/api/mcp
@@ -26,6 +26,12 @@ The working flow:
 4. **Watch** — signals too weak to pass are held in the Veil instead of discarded. `vara_get_veil_state` shows the watch list and whether held signals are strengthening or fading.
 
 Two honest limits: a scan does live network work and can take a while (on this free-tier host it can occasionally time out — retrying is safe), and scan history is archived on the running instance, so older scans may not always be reachable. Keep the `scan_id` of anything you care about.
+
+## Access tiers
+
+- **Free** — no key. Scans are capped at a 24-hour sweep and up to 5 planes, with a shared daily budget (10/day, 5 per caller). Reports come back as an **FFIR** (Free Field Intel Report): the top observed signals, no interpretation layer. All read tools — listing scans, re-reading reports, querying signals, checking the Veil — are unlimited.
+- **Full-Depth Key — $99/month** — an operator-issued API key unlocks the full instrument: 168-hour sweep, all planes, up to 5 scans per day, and full-format Field Intel Reports. [Get a Full-Depth Key](https://buy.stripe.com/eVqeVd2Ve57TdlP26b7Vm05) — after checkout the operator issues your key by email; present it as `Authorization: Bearer <key>` (or `X-Vara-Api-Key`) when your client connects.
+- **Field Intel Report engagements** — a commissioned report built from a full-depth scan plus the governed interpretation layer (weak-signal identification, confidence and uncertainty, contradiction resolution, evidence-linked conclusions). Sealed Evidence Pilot: $15,000 first engagement, $25,000 standard, billed by invoice (50% to start, 50% on delivery). Contact: lattice.liminaljermo@gmail.com.
 
 ## The Lattice
 

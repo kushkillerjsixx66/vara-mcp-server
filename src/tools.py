@@ -72,8 +72,9 @@ def _budget_exhausted_payload(tier: str, decision: dict) -> dict:
             f"{decision['scope']} limit; resets at the next UTC midnight). "
             "Reads remain free and unlimited: vara_list_scans, vara_get_scan, "
             "vara_query_signals, vara_get_veil_state. Full-depth scans "
-            "(168h sweep, all planes) run on an operator-issued API key — "
-            f"request one at {config.BUDGET_CONTACT}."
+            "(168h sweep, all planes) run on a Full-Depth Key "
+            f"($99/mo): {config.KEY_PURCHASE_URL} — keys are issued by the "
+            f"operator after checkout ({config.BUDGET_CONTACT})."
         ),
         "scan_budget": {
             "tier": tier,
@@ -620,7 +621,8 @@ def _render_ffir_from_report(report: dict, arguments: dict) -> str:
         "contradiction resolution, cross-cycle continuity, and "
         "evidence-linked conclusions. It is produced per engagement, not "
         "self-serve.",
-        f"  Full reports and API keys: {config.BUDGET_CONTACT}",
+        f"  Full-depth scans run on a Full-Depth Key ($99/mo): {config.KEY_PURCHASE_URL}",
+        f"  Full reports (engagements) and key support: {config.BUDGET_CONTACT}",
         "  Published examples: https://liminaljermo.substack.com",
         "",
         f"VARA:SCAN {(report.get('scan_id') or '')[:8]} · FREE FIELD INTEL REPORT",
@@ -656,7 +658,8 @@ def vara_generate_fir(arguments: dict) -> dict:
             out["format_notice"] = (
                 "The full operator_tier FIR is the keyed/engagement tier. "
                 "This is a Free Field Intel Report (FFIR): observed signals "
-                f"only, no interpretation layer. Keys and full reports: "
+                "only, no interpretation layer. Full-Depth Key ($99/mo): "
+                f"{config.KEY_PURCHASE_URL}. Full reports: "
                 f"{config.BUDGET_CONTACT}."
             )
         return out

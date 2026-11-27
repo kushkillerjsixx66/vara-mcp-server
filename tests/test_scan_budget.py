@@ -209,6 +209,7 @@ def test_tool_gate_exhaustion_returns_payload_without_scanning(budget_env, fake_
     assert "error" not in first or not first["error"]
     second = tools.vara_run_scan({"keywords": ["x"]})
     assert "budget exhausted" in second["error"]
+    assert config.KEY_PURCHASE_URL in second["error"]
     assert second["scan_budget"]["exhausted"] is True
     assert "veil_state" in second
     assert fake_vendor["count"] == 1  # the vendor scan never ran twice

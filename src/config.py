@@ -83,6 +83,12 @@ KEYED_MAX_SWEEP_HOURS = _env_int("VARA_KEYED_MAX_SWEEP_HOURS", 168)
 KEYED_MAX_PLANES = _env_int("VARA_KEYED_MAX_PLANES", 8)
 KEYED_DAILY_BUDGET = _env_int("VARA_KEYED_DAILY_BUDGET", 5)
 BUDGET_CONTACT = os.environ.get("VARA_BUDGET_CONTACT", "lattice.liminaljermo@gmail.com")
+# Stripe Payment Link for the Full-Depth Key subscription (created
+# 2026-11-27). Surfaced in the FFIR footer and the budget-exhaustion
+# notice so the upgrade route is a checkout, not just an email address.
+KEY_PURCHASE_URL = os.environ.get(
+    "VARA_KEY_PURCHASE_URL", "https://buy.stripe.com/eVqeVd2Ve57TdlP26b7Vm05"
+)
 
 
 def api_keys() -> list[str]:
