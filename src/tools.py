@@ -47,7 +47,7 @@ def vara_run_scan(arguments: dict) -> dict:
         from vara_scan import run_vara_scan, VaraConfig
     except ImportError as e:
         return {
-            "error": f"Cannot import operational Vara package from {config.VARA_PACKAGE_PATH}: {e}",
+            "error": f"Cannot import operational Vara package: {e}",
             "hint": "Set VARA_PACKAGE_PATH to the directory containing vara_scan.py",
         }
 
@@ -350,7 +350,6 @@ def vara_get_scan(arguments: dict) -> dict:
     if not data:
         return {
             "error": f"No scan found matching '{scan_id}'",
-            "searched": str(config.OUTPUT_DIR),
             "durable_enabled": durable.enabled(),
         }
 
@@ -490,7 +489,10 @@ def vara_generate_fir(arguments: dict) -> dict:
         return {"error": "scan_id is required for FIR generation in this version"}
 
     report = vara_get_scan({"scan_id": scan_id, "include_signals": True})
-    if "error" in report:
+    # Successful scan reports carry an "error": None field, so presence of
+    # the key is not an error signal — check the value. (The presence check
+    # made this tool return the full scan report instead of the FIR.)
+    if report.get("error"):
         return report
 
     markdown = _render_fir_from_report(report, arguments)

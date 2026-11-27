@@ -311,9 +311,32 @@ def _keyword_relevance(text: str, keywords: list) -> float:
 
 
 def _fetch_rss(url: str, timeout: int = 10) -> list:
-    """Fetch and parse an RSS/Atom feed. Returns list of feedparser entries."""
+    """Fetch and parse an RSS/Atom feed. Returns list of feedparser entries.
+
+    The fetch goes through the SSRF guard (ssrf_guard.fetch_bytes): DNS is
+    resolved and validated in the same call that connects, the connection
+    is pinned to the validated IP, every redirect hop is re-validated
+    before it is followed, and the body is size-capped. feedparser only
+    ever parses the guarded bytes — it never resolves or fetches the URL
+    itself, so a feed URL that redirects to a private or link-local
+    address is refused at the hop, not followed. The timeout is the
+    guard's connect/read timeout, so a hung feed cannot hang the scan
+    past it. (Audit 2026-11-27, finding B1: previously feedparser fetched
+    the URL directly and none of the guard applied at fetch time.)
+    caller_supplied=True applies the optional VARA_FEED_HOST_ALLOWLIST
+    uniformly at fetch time, matching the intake validation in the MCP
+    tool layer.
+    """
     try:
-        feed = feedparser.parse(url, request_headers={"User-Agent": "VaraHarvester/1.0"})
+        from ssrf_guard import fetch_bytes
+
+        _status, _headers, body, _final_url = fetch_bytes(
+            url,
+            timeout=float(timeout),
+            caller_supplied=True,
+            headers={"User-Agent": "VaraHarvester/1.0"},
+        )
+        feed = feedparser.parse(body)
         return feed.get("entries", [])
     except Exception as e:
         logger.warning("RSS fetch failed %s: %s", url, e)
