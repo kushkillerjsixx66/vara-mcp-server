@@ -662,6 +662,18 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
     deferred_ids = {id(s) for r in sentinel_reports for s in r.deferred_signals}
     blocked_ids = {id(s) for r in sentinel_reports for s in r.blocked_signals}
     pruned_ids = {id(s) for r in sentinel_reports for s in r.pruned_signals}
+    # Identity-level reconciliation (audit 2026-11-27, finding M4): run_veil
+    # dedupes the deferred list by signal_id, keeping the first dict per
+    # identity. A promoted signal's same-signal_id twin dict therefore fails
+    # the object-identity test above and would be stamped veil_held while
+    # its identity sits in the output as promoted. Disposition is a property
+    # of the signal identity, not of one dict object: reconcile by
+    # signal_id after the object-identity pass.
+    promoted_sids = {
+        s.get("signal_id")
+        for s in (getattr(veil_report, "promoted_signals", []) or [])
+        if isinstance(s, dict) and s.get("signal_id")
+    }
     all_harvested = clustered + below_floor
     for sig in all_harvested:
         if not isinstance(sig, dict):
@@ -680,9 +692,24 @@ def run_vara_scan(config: VaraConfig) -> VaraScanReport:
             sig["disposition"] = "pruned"
         else:
             sig.setdefault("disposition", "harvested")
+        if (
+            sig.get("disposition") == "veil_held"
+            and sig.get("signal_id")
+            and sig["signal_id"] in promoted_sids
+        ):
+            sig["disposition"] = "promoted"
+    # Counts are per identity: a signal_id appearing as twin dicts counts
+    # once, under its reconciled disposition. Signals without a signal_id
+    # count individually, as before.
     disposition_counts: dict = {}
+    _counted_sids: set = set()
     for sig in all_harvested:
         if isinstance(sig, dict):
+            sid = sig.get("signal_id")
+            if sid:
+                if sid in _counted_sids:
+                    continue
+                _counted_sids.add(sid)
             d = sig.get("disposition", "harvested")
             disposition_counts[d] = disposition_counts.get(d, 0) + 1
 
