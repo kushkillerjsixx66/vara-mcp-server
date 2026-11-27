@@ -513,6 +513,31 @@ def hydrate_from_durable() -> dict:
     return result
 
 
+def _budget_path() -> str:
+    return _state_path("scan_budget.json")
+
+
+def load_budget_state() -> Optional[dict]:
+    """Read the scan-budget counters from the durable store, if any."""
+    if not enabled():
+        return None
+    text = _store_get_text(_budget_path())
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def save_budget_state(state: dict) -> bool:
+    if not enabled():
+        return False
+    body = json.dumps(state, indent=2, default=str)
+    return _store_put_text(_budget_path(), body, "chore(archive): scan budget counters")
+
+
 def list_durable_scans(limit: int = 20) -> list:
     return load_index()[:limit]
 

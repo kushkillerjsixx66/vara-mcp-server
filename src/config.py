@@ -49,6 +49,52 @@ DEFAULT_SWEEP_HOURS = 24
 DEFAULT_PLANES = ["tech", "scientific", "adjacent_possible", "economic", "geopolitical"]
 MAX_SIGNALS_RETURN = 200
 
+
+# ─── Scan budget (operator ruling 2026-11-27) ────────────────────────────────
+# vara_run_scan is the only expensive tool (live harvest); the read tools
+# stay unlimited. Two tiers:
+#   anonymous — no key. Depth-capped, small shared daily pool. This is the
+#               demo surface (directory playgrounds, curious agents).
+#   keyed     — a key from VARA_API_KEYS (operator-issued). Full depth up
+#               to the pinned FIR configuration, per-key daily allowance.
+# Every dial is an environment variable so the operator can retune without
+# a code change. VARA_SCAN_BUDGET_ENABLED=0 turns the gate off entirely.
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_bool(name: str, default: bool = True) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw not in ("0", "false", "no", "off")
+
+
+SCAN_BUDGET_ENABLED = _env_bool("VARA_SCAN_BUDGET_ENABLED", True)
+ANON_MAX_SWEEP_HOURS = _env_int("VARA_ANON_MAX_SWEEP_HOURS", 24)
+ANON_MAX_PLANES = _env_int("VARA_ANON_MAX_PLANES", 5)
+ANON_DAILY_BUDGET = _env_int("VARA_ANON_DAILY_BUDGET", 10)
+ANON_PER_CALLER_DAILY = _env_int("VARA_ANON_PER_CALLER_DAILY", 5)
+KEYED_MAX_SWEEP_HOURS = _env_int("VARA_KEYED_MAX_SWEEP_HOURS", 168)
+KEYED_MAX_PLANES = _env_int("VARA_KEYED_MAX_PLANES", 8)
+KEYED_DAILY_BUDGET = _env_int("VARA_KEYED_DAILY_BUDGET", 5)
+BUDGET_CONTACT = os.environ.get("VARA_BUDGET_CONTACT", "lattice.liminaljermo@gmail.com")
+
+
+def api_keys() -> list[str]:
+    """Operator-issued API keys from VARA_API_KEYS (comma-separated).
+
+    Read live so a key rotation in the deployment environment takes effect
+    without a code change. Keys are credentials: they are never logged,
+    stored, or returned — budget state records only a truncated hash.
+    """
+    raw = os.environ.get("VARA_API_KEYS") or ""
+    return [k.strip() for k in raw.split(",") if k.strip()]
+
 # Seed filenames that may need to be copied from the package into the
 # writable data root on first use (cold start / empty /tmp).
 _SEED_FILES = (

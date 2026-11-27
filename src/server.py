@@ -16,6 +16,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 try:
     from . import config
+    from . import request_context
     from . import tools as _tools_data
     from .tools import call_tool
 except ImportError:
@@ -28,6 +29,7 @@ except ImportError:
 
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from src import config
+    from src import request_context
     from src import tools as _tools_data
     from src.tools import call_tool
 
@@ -87,7 +89,11 @@ mcp = FastMCP(
         "take a while; all other tools are fast reads. Scan history lives in "
         "an archive local to the running server instance, so older scans may "
         "be unavailable — keep the scan_id and any report you need. No "
-        "account or API key is required."
+        "account or API key is required: anonymous scans run in a capped "
+        "demo tier (24h sweep, up to 5 planes, a shared daily budget), and "
+        "an operator-issued API key (Authorization: Bearer, or "
+        "X-Vara-Api-Key) unlocks full-depth scans. Read tools are never "
+        "budget-limited."
     ),
     stateless_http=True,
     json_response=True,
@@ -109,7 +115,9 @@ def _call(name: str, arguments: dict[str, Any]) -> Any:
         "what it finds for novelty, and returns a scan report whose signals "
         "each carry their source and retrieval time, plus a scan_id for "
         "follow-up calls. The only tool that changes state; it makes live "
-        "network requests and can take a while."
+        "network requests and can take a while. Scans are budget-tiered: "
+        "anonymous callers are capped at a 24h sweep and 5 planes with a "
+        "shared daily budget; an operator-issued API key unlocks full depth."
     ),
     annotations=ToolAnnotations(
         read_only_hint=False,
@@ -574,6 +582,24 @@ class _NormalizeMcpPath:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("method") == "POST" \
+                and scope.get("path") in ("/api/mcp", "/api/mcp/"):
+            # Park the caller's API key + client IP in contextvars for the
+            # scan-budget gate (src/budget.py). Values are used only for
+            # tier resolution and hashed counting — never logged or echoed.
+            headers = {
+                k.decode("latin-1").lower(): v.decode("latin-1")
+                for k, v in scope.get("headers") or []
+            }
+            api_key = headers.get("x-vara-api-key")
+            auth = headers.get("authorization") or ""
+            if not api_key and auth.lower().startswith("bearer "):
+                api_key = auth[7:].strip()
+            forwarded = headers.get("x-forwarded-for") or ""
+            caller_ip = forwarded.split(",")[0].strip() or None
+            if caller_ip is None and scope.get("client"):
+                caller_ip = scope["client"][0]
+            request_context.set_caller(api_key, caller_ip)
         if scope["type"] == "http" and scope.get("path") in ("/api/mcp", "/api/mcp/"):
             if scope.get("method") in self._BLOCKED_METHODS:
                 await send(
