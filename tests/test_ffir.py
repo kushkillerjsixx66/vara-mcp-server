@@ -84,6 +84,12 @@ def test_ffir_is_bounded_and_observed_only(archive_env):
     assert "WHAT THE FULL REPORT ADDS" in md
 
 
+def test_ffir_carries_the_key_purchase_link(archive_env):
+    out = tools.vara_generate_fir({"scan_id": SCAN_ID, "format": "free"})
+    assert config.KEY_PURCHASE_URL in out["markdown"]
+    assert config.KEY_PURCHASE_URL.startswith("https://buy.stripe.com/")
+
+
 def test_keyed_gets_operator_tier(archive_env, monkeypatch):
     monkeypatch.setenv("VARA_API_KEYS", "operator-key")
     request_context.set_caller("operator-key", None)
