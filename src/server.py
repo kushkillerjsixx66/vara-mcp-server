@@ -12,9 +12,22 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from . import config
-from . import tools as _tools_data
-from .tools import call_tool
+try:
+    from . import config
+    from . import tools as _tools_data
+    from .tools import call_tool
+except ImportError:
+    # Direct execution (python src/server.py) has no package context for the
+    # relative imports above. Put the project root on the path and import as
+    # the src package instead, so the file runs the same way it is imported
+    # by the Vercel entry (api/index.py) and by python -m src.server.
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from src import config
+    from src import tools as _tools_data
+    from src.tools import call_tool
 
 
 # DNS-rebinding protection is kept enabled. The public Vercel hostname must be
