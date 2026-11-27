@@ -319,7 +319,12 @@ def vara_run_scan(arguments: dict) -> dict:
         }
 
     if arguments.get("generate_fir"):
-        result["field_intel_report"] = _render_fir_from_report(result, arguments)
+        # A scan run inside the free tier reports back as an FFIR — the
+        # free report shape travels with the tier that produced the scan.
+        if budget_ctx is not None and budget_ctx["tier"] == "anonymous":
+            result["field_intel_report"] = _render_ffir_from_report(result, arguments)
+        else:
+            result["field_intel_report"] = _render_fir_from_report(result, arguments)
 
     # Dual-write: local /tmp is hot cache; durable backend (Blob preferred) is the archive.
     try:
@@ -570,6 +575,59 @@ def _render_fir_from_report(report: dict, arguments: dict) -> str:
     return "\n".join(lines)
 
 
+def _render_ffir_from_report(report: dict, arguments: dict) -> str:
+    """Free Field Intel Report (FFIR) — the free tier's report shape.
+
+    Deliberately bounded: observed signals only, top 8, no inference, no
+    cross-cycle tracking, no contradiction resolution. That restraint is
+    the product boundary — the full FIR's value is the governed
+    interpretation layer, and the FFIR says so on its face.
+    """
+    ts = report.get("timestamp") or datetime.datetime.utcnow().isoformat()
+    planes = ", ".join(report.get("active_planes") or [])
+    signals = report.get("signals") or []
+    null = report.get("null_result", False)
+
+    lines = [
+        "FREE FIELD INTEL REPORT  ·  VARA:SCAN INTELLIGENCE LAYER",
+        "",
+        f"FFIR  ·  Scan {(report.get('scan_id') or '')[:8]}  |  Issued: {ts}",
+        "",
+        "Classification: Free-tier brief. Observed signals only — this "
+        "report lists what one scan found; it does not interpret it.",
+        f"Scan label: {report.get('scan_label')}",
+        f"Active planes: {planes}",
+        f"Signals returned: {len(signals)}  |  Null result: {null}",
+        "",
+        "SECTION 01 — TOP SIGNALS (OBSERVED)",
+    ]
+    for i, s in enumerate(signals[:8], 1):
+        title = (s.get("title") or s.get("content") or "")[:120]
+        plane = s.get("plane", "?")
+        nov = s.get("novelty_score", 0)
+        lines.append(f"  {i}. [{plane}] nov={nov:.3f}  {title}")
+    if len(signals) > 8:
+        lines.append(f"  … and {len(signals) - 8} more signals in the full scan record.")
+    if null:
+        lines.append("  (Null result: the scan completed and observed no qualifying signals.)")
+
+    lines += [
+        "",
+        "SECTION 02 — WHAT THE FULL REPORT ADDS",
+        "  A Field Intel Report (FIR) is built from a full-depth scan "
+        "(168h sweep, all planes) and adds the governed interpretation "
+        "layer: weak-signal identification, confidence and uncertainty, "
+        "contradiction resolution, cross-cycle continuity, and "
+        "evidence-linked conclusions. It is produced per engagement, not "
+        "self-serve.",
+        f"  Full reports and API keys: {config.BUDGET_CONTACT}",
+        "  Published examples: https://liminaljermo.substack.com",
+        "",
+        f"VARA:SCAN {(report.get('scan_id') or '')[:8]} · FREE FIELD INTEL REPORT",
+    ]
+    return "\n".join(lines)
+
+
 def vara_generate_fir(arguments: dict) -> dict:
     scan_id = arguments.get("scan_id")
     if not scan_id:
@@ -582,9 +640,30 @@ def vara_generate_fir(arguments: dict) -> dict:
     if report.get("error"):
         return report
 
+    # Tier boundary (operator ruling 2026-11-27): the free tier's report
+    # is the FFIR. Anonymous callers receive the FFIR whatever format
+    # they ask for — with a notice when they asked for the full format —
+    # while keyed callers get the format they requested.
+    requested = arguments.get("format") or "operator_tier"
+    resolved = budget_mod.resolve_tier(request_context.current_api_key())
+    if resolved["tier"] == "anonymous" and requested != "lightweight":
+        out = {
+            "format": "free",
+            "scan_id": report.get("scan_id"),
+            "markdown": _render_ffir_from_report(report, arguments),
+        }
+        if requested == "operator_tier":
+            out["format_notice"] = (
+                "The full operator_tier FIR is the keyed/engagement tier. "
+                "This is a Free Field Intel Report (FFIR): observed signals "
+                f"only, no interpretation layer. Keys and full reports: "
+                f"{config.BUDGET_CONTACT}."
+            )
+        return out
+
     markdown = _render_fir_from_report(report, arguments)
     return {
-        "format": arguments.get("format") or "operator_tier",
+        "format": requested,
         "scan_id": report.get("scan_id"),
         "markdown": markdown,
     }
